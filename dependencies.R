@@ -8,9 +8,10 @@ library("tibble")
 # io
 library("readxl")
 library("fst")
+library("httr")
 library("RCurl")
 library("XML")
-
+library("jsonlite")
 
 parameters <- config::get(file = "../parameters.yml")
 

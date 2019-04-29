@@ -43,6 +43,9 @@ cleanRawData <- function(dt, check_dt){
   
   table(table(rawData$page, useNA = 'ifany'))
 
+  #TO DO remove address 2 if it is redundant
+  dt[address2 == street_nb || address2 == zip , address2:= NA]
+
   
   #1000 pages
   

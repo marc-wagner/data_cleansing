@@ -43,6 +43,8 @@ write.csv(cleanData
 #train duplicates finding
 
 #validate addresses
+buildBpostValidateJson(rawData[1000:1100,])
+
 postSingleBpostValidation(id= rawData[15,id]
                           ,StreetName = rawData[15, address]
                           ,StreetNumber = rawData[15,street_nb]

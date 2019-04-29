@@ -170,12 +170,13 @@ test_bpost_webservice_itemized <- function() {
 
 buildXlmAddress <- function(id, StreetName , StreetNumber, BoxNumber, PostalCode,MunicipalityName) {
   
-  top2 = xmlTree("v001:AddressToValidate")
+  top2 = xmlTree("v001:AddressToValidate", namespaces= .(v001 = ""))
   top2$setNamespace("r")
-  top2$addTag("v001:PostalAddress")
-  top2$addTag("v001:DeliveryPointLocation" , close = TRUE)
-  top2$addTag("v001:PostalCodeMunicipality", close = TRUE)
+  top2$addNode("v001:PostalAddress")
+  top2$addNode("v001:DeliveryPointLocation" , close = TRUE)
+  top2$addNode("v001:PostalCodeMunicipality", close = TRUE)
   top2$closeTag()  
+  top2$value()
   
   top = newXMLNode("v001:AddressToValidate", attrs=c(id="1"))
   postalAddress = newXMLNode("v001:PostalAddress", parent=top)
@@ -192,12 +193,93 @@ buildXlmAddress <- function(id, StreetName , StreetNumber, BoxNumber, PostalCode
   top
 }
 
-
-postSingleBpostValidation <- function(id, StreetName , StreetNumber, BoxNumber, PostalCode,MunicipalityName){
+postSingleBpostValidationSoap <- function(id, StreetName , StreetNumber, BoxNumber, PostalCode,MunicipalityName){
  
   buildXlmAddress(id, StreetName , StreetNumber, BoxNumber, PostalCode,MunicipalityName) 
 }
 
 buildXml <- function(dt){
+  
+}
+
+
+buildBpostValidateJson <- function(dt){
+  
+  browser()
+  
+  jsonInput <- copy(dt[])
+  jsonInput[is.na(jsonInput)] <- ''  #replace NAs by blanks for building address
+  jsonInput <- jsonInput[, paste(c(address,street_nb, address2, ',' ,zip, locality), collapse = ' ') ,by = id]
+  dt[, addressline := paste( .(address, street_nb, address2,zip, locality), collapse = ' ')]
+  
+  dt[, .("@id" := id, AddressBlockLines := addressline)]
+  
+    
+#JSON structure: either using fields or free text (see postman examples)
+    # {
+    #   "ValidateAddressesRequest": {
+    #     "AddressToValidateList": {
+    #       "AddressToValidate": [
+    #         {
+    #           "@id": "1",
+    #           "PostalAddress": {
+    #             "DeliveryPointLocation": {
+    #               "StructuredDeliveryPointLocation": {
+    #                 "StreetName": {
+    #                   "@locale": "fr",
+    #                   "*body": "Rue de la Loi"
+    #                 },
+    #                 "StreetNumber": "16",
+    #                 "BoxNumber": "1"
+    #               }
+    #             },
+    #             "PostalCodeMunicipality": {
+    #               "StructuredPostalCodeMunicipality": {
+    #                 "PostalCode": "1000",
+    #                 "MunicipalityName": {
+    #                   "@locale": "fr",
+    #                   "*body": "Brussels"
+    #                 }
+    #               }
+    #             }
+    #           }
+    #         },
+    #         {
+    #           "@id": "2",
+    #           "AddressBlockLines": {
+    #             "UnstructuredAddressLine": {
+    #               "*body": "Rue de la Loi 14, 1000 Brussel"
+    #             }
+    #           }
+    #         }
+    #         ]
+    #     },
+    #     "CallerIdentification": {
+    #       "CallerName": "klimaatzaak"
+    #     }
+    #   }
+    # }
+    
+    
+  
+  request_body <- data.frame(
+    language = c("en","en"),
+    id = c("1","2"),
+    text = c("This is wasted! I'm angry","This is awesome! Good Job Team! appreciated")
+  )
+  request_body_json <- toJSON(list(documents = request_body), auto_unbox = TRUE) 
+  require(httr)
+  result <- POST("https://westus.api.cognitive.microsoft.com/text/analytics/v2.0/sentiment",
+                 body = request_body_json,
+                 add_headers(.headers = c("Content-Type"="application/json","Ocp-Apim-Subscription-Key"="my_subscrition_key")))
+  Output <- content(result)
+  rawtext
+}
+
+#https://stackoverflow.com/questions/39809117/how-to-post-api-in-r-having-header-json-body
+
+postSingleBpostValidationRest <- function(){
+  
+  
   
 }
