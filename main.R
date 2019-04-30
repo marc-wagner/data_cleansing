@@ -43,6 +43,11 @@ write.csv(cleanData
 #train duplicates finding
 
 #validate addresses
-jsonBody <- buildBpostValidateJsonBody(rawData[1000:1100,])
-
+#using Bpost: works in postman, fails here curl::curl_fetch_memory(url, handle = handle) :Failure when receiving data from the peer
+jsonBody <- buildBpostValidateJsonBody(cleanData[1001:1010,])
 postMultipleBpostValidationRest(jsonBody)
+
+mapIdtoAddress <- buildGoogleApiGeocodeJsonUrlEncode(cleanData)
+uniqueAddress <- as.data.table(unique(mapIdtoAddress$Address))[, .(Address = V1)]
+geocodedAddress <- uniqueAddress[1:10, .(Address, lapply(Address, getSingleGoogleGeocodingRest))]
+geocodedAddress2 <- uniqueAddress[11:1000, .(Address, lapply(Address, getSingleGoogleGeocodingRest))]

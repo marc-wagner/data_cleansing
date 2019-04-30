@@ -215,7 +215,6 @@ getjsonFooter <-function() {
 
 buildBpostValidateJsonBody <- function(dt){
    
-  browser()
   jsonInput <- copy(dt)
   jsonInput[is.na(jsonInput)] <- ''  #replace NAs by blanks for building address
   jsonInput <- jsonInput[, paste(c(address,street_nb, address2, ',' ,zip, locality), collapse = ' ') ,by = id] 
@@ -274,7 +273,7 @@ buildBpostValidateJsonBody <- function(dt){
   #   text = c("This is wasted! I'm angry","This is awesome! Good Job Team! appreciated")
   # )
   
-  request_body_json <- toJSON(list(documents = as.data.frame(jsonInput[10:15,])), auto_unbox = TRUE) 
+  request_body_json <- toJSON(list(documents = as.data.frame(jsonInput)), auto_unbox = TRUE) 
   #2 lines below are a hack because get cartesian product when building subtrees in data frame for nested JSON.
   request_body_json <- str_replace_all(request_body_json, coll('"AddressBlockLines":"')
                                                           ,'"AddressBlockLines":{"UnstructuredAddressLine": {"*body": "')
@@ -284,8 +283,12 @@ buildBpostValidateJsonBody <- function(dt){
   request_body_json
 }
 
-
-
+buildGoogleApiGeocodeJsonUrlEncode <- function(dt){
+  jsonInput <- copy(dt)
+  jsonInput[is.na(jsonInput)] <- ''  #replace NAs by blanks for building address
+  jsonInput <- jsonInput[, paste(c(address,street_nb, address2, ',' ,zip, locality, country), collapse = '+') ,by = id] 
+  jsonInput <- jsonInput[, .(id, Address = str_replace_all(V1, fixed(' '), '+'))]
+ }
 
 #https://stackoverflow.com/questions/39809117/how-to-post-api-in-r-having-header-json-body
 
@@ -295,9 +298,28 @@ postSingleBpostValidationRest <- function(){
 postMultipleBpostValidationRest <- function(body){
   
   browser()
-    
   result <- POST("https://webservices-pub.bpost.be/ws/ExternalMailingAddressProofingCSREST_v1/address/validateAddresses",
                  body = body,
-                 add_headers(.headers = c("Content-Type"="application/json")))
+                 add_headers(.headers = c(
+                    "Content-Type"="application/json"
+                   ,"accept-encoding"="gzip, deflate"
+                   ,"Connection"="keep-alive",
+                   "User-Agent"="PostmanRuntime/7.11.0",
+                   "Accept"="*/*",
+                   "Cache-Control"="no-cache",
+                   "Postman-Token"="135e05a9-1df1-49d8-a913-6d364439cf4f",
+                   "Host"="webservices-pub.bpost.be",
+                   "cookie"="webservices-pub.bpost.be=2818834442.64288.0000",
+                   "accept-encoding"="gzip, deflate",
+                   "content-length"="1424"
+                   )))
   content(result)
+}
+
+getSingleGoogleGeocodingRest <- function(address){
+  urlFromParts <- str_replace("https://maps.googleapis.com/maps/api/geocode/json?address=XXXXXXXXX&key=", fixed('XXXXXXXXX'),address)
+  urlFromParts <- paste(urlFromParts, parameters$google_api_key,sep='')
+  result <- GET(urlFromParts)
+  stop_for_status(result)
+  content(result,"text")
 }

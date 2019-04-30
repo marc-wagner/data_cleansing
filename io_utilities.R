@@ -25,31 +25,42 @@ readRawDataFolder <- function(path) {
   data
 }
 
-cleanRawData <- function(dt, check_dt){
+cleanRawData <- function(dt, check_dt= NULL){
   
-  #check data quality
+  #1) non altering checks for data quality
   browser()
   #check completeness
   
   #expected nr records for batch001: 45944 
   print(nrow(dt))
-  if(nrow(dt[!is.na(id),]) != nrow(check_dt[!is.na(check_dt$id),])){
-    check_dt[, id:=as.character(id)]
-    diff_raw_cleansed <- base::merge(check_dt, dt, by='id', all.x = T)
-    
+  if(!is.null(check_dt)){
+    if(nrow(dt[!is.na(id),]) != nrow(check_dt[!is.na(check_dt$id),])){
+      check_dt[, id:=as.character(id)]
+      diff_raw_cleansed <- base::merge(check_dt, dt, by='id', all.x = T)
+    }
   }
     
   
   
   table(table(rawData$page, useNA = 'ifany'))
-
-  #TO DO remove address 2 if it is redundant
-  dt[address2 == street_nb || address2 == zip , address2:= NA]
-
   
+  print(table(rawData[,country]))
+  print(table(rawData[,reason]))
+  
+  #alter data to cleanse for future processing
+  cleanData <- copy(dt) 
+  #remove address 2 if it is redundant
+  cleanData <- cleanData[(coll(address2) == coll(street_nb)) | (coll(address2) == coll(zip)) , address2:= NA]
+  cleanData <- cleanData[country == 'BE', country:='Belgium']
+
   #1000 pages
   
   #nr of unique id's and guids'
   
-  dt[!is.na(id) ,]
+  #remove duplicates and errors 
+  cleanData <- cleanData[reason %in% c('BV', 'C') | is.na(reason),]
+  
+  #remove records with no id
+  cleanData <- cleanData[!is.na(id),]
+  
 }
