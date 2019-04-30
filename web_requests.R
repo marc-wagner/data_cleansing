@@ -202,25 +202,23 @@ buildXml <- function(dt){
   
 }
 
-
 getjsonHeader <-function() {  
    '{"ValidateAddressesRequest": { "AddressToValidateList": { "AddressToValidate": ['
  # '{ValidateAddressesRequest: { AddressToValidateList: { AddressToValidate: ['
 }
 
 getjsonFooter <-function() {  
-  ']   }, "CallerIdentification": {  "CallerName": "klimaatzaak" } } }'
-  #']   }, CallerIdentification: {  CallerName: klimaatzaak } } }'
-}
+  # add 2 extra } at beginning to close the last item in enumeration due to replacement  of 
+  # AddressBlockLines":"' by '"AddressBlockLines":{"UnstructuredAddressLine": {"*body
+  '}}]   }, "CallerIdentification": {  "CallerName": "klimaatzaak" } } }'
+ }
 
-
-buildBpostValidateJson <- function(dt){
-  
+buildBpostValidateJsonBody <- function(dt){
+   
   browser()
-  
-  jsonInput <- copy(dt[])
+  jsonInput <- copy(dt)
   jsonInput[is.na(jsonInput)] <- ''  #replace NAs by blanks for building address
-  jsonInput <- jsonInput[, paste(c(address,street_nb, address2, ',' ,zip, locality), collapse = ' ') ,by = id]
+  jsonInput <- jsonInput[, paste(c(address,street_nb, address2, ',' ,zip, locality), collapse = ' ') ,by = id] 
   jsonInput <- jsonInput[, .("@id" = id, AddressBlockLines = V1)]
   
 #JSON structure: either using fields or free text (see postman examples)
@@ -277,20 +275,29 @@ buildBpostValidateJson <- function(dt){
   # )
   
   request_body_json <- toJSON(list(documents = as.data.frame(jsonInput[10:15,])), auto_unbox = TRUE) 
+  #2 lines below are a hack because get cartesian product when building subtrees in data frame for nested JSON.
+  request_body_json <- str_replace_all(request_body_json, coll('"AddressBlockLines":"')
+                                                          ,'"AddressBlockLines":{"UnstructuredAddressLine": {"*body": "')
+  request_body_json <- str_replace_all(request_body_json, coll('"},{"@id":'),'"}}},{"@id":')
   request_body_json <- str_replace(request_body_json, coll('{"documents":['), getjsonHeader())
   request_body_json <- str_replace(request_body_json, coll(']}')            , getjsonFooter())
-                            
-  result <- POST("https://westus.api.cognitive.microsoft.com/text/analytics/v2.0/sentiment",
-                 body = request_body_json,
-                 add_headers(.headers = c("Content-Type"="application/json","Ocp-Apim-Subscription-Key"="my_subscrition_key")))
-  Output <- content(result)
-  rawtext
+  request_body_json
 }
+
+
+
 
 #https://stackoverflow.com/questions/39809117/how-to-post-api-in-r-having-header-json-body
 
 postSingleBpostValidationRest <- function(){
+}
+
+postMultipleBpostValidationRest <- function(body){
   
-  
-  
+  browser()
+    
+  result <- POST("https://webservices-pub.bpost.be/ws/ExternalMailingAddressProofingCSREST_v1/address/validateAddresses",
+                 body = body,
+                 add_headers(.headers = c("Content-Type"="application/json")))
+  content(result)
 }

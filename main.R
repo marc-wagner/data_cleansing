@@ -43,11 +43,6 @@ write.csv(cleanData
 #train duplicates finding
 
 #validate addresses
-buildBpostValidateJson(rawData[1000:1100,])
+jsonBody <- buildBpostValidateJsonBody(rawData[1000:1100,])
 
-postSingleBpostValidation(id= rawData[15,id]
-                          ,StreetName = rawData[15, address]
-                          ,StreetNumber = rawData[15,street_nb]
-                          ,BoxNumber = rawData[15,address2]
-                          ,PostalCode = rawData[15,zip]
-                          ,MunicipalityName = rawData[15,locality])
+postMultipleBpostValidationRest(jsonBody)
