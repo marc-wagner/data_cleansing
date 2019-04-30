@@ -4,12 +4,13 @@ library("config")
 library("magrittr")
 library("data.table")
 library("tibble")
+library("stringr")
 
 # io
 library("readxl")
 library("fst")
 library("httr")
-library("RCurl")
+#library("RCurl")
 library("XML")
 library("jsonlite")
 
@@ -18,7 +19,7 @@ parameters <- config::get(file = "../parameters.yml")
 # general purpose
 #library("readr")
 #library("lubridate")
-#library("stringr")
+
 #library("stringdist")
 #library("purrr")
 #library("plyr")

@@ -203,6 +203,17 @@ buildXml <- function(dt){
 }
 
 
+getjsonHeader <-function() {  
+   '{"ValidateAddressesRequest": { "AddressToValidateList": { "AddressToValidate": ['
+ # '{ValidateAddressesRequest: { AddressToValidateList: { AddressToValidate: ['
+}
+
+getjsonFooter <-function() {  
+  ']   }, "CallerIdentification": {  "CallerName": "klimaatzaak" } } }'
+  #']   }, CallerIdentification: {  CallerName: klimaatzaak } } }'
+}
+
+
 buildBpostValidateJson <- function(dt){
   
   browser()
@@ -210,11 +221,8 @@ buildBpostValidateJson <- function(dt){
   jsonInput <- copy(dt[])
   jsonInput[is.na(jsonInput)] <- ''  #replace NAs by blanks for building address
   jsonInput <- jsonInput[, paste(c(address,street_nb, address2, ',' ,zip, locality), collapse = ' ') ,by = id]
-  dt[, addressline := paste( .(address, street_nb, address2,zip, locality), collapse = ' ')]
+  jsonInput <- jsonInput[, .("@id" = id, AddressBlockLines = V1)]
   
-  dt[, .("@id" := id, AddressBlockLines := addressline)]
-  
-    
 #JSON structure: either using fields or free text (see postman examples)
     # {
     #   "ValidateAddressesRequest": {
@@ -262,13 +270,16 @@ buildBpostValidateJson <- function(dt){
     
     
   
-  request_body <- data.frame(
-    language = c("en","en"),
-    id = c("1","2"),
-    text = c("This is wasted! I'm angry","This is awesome! Good Job Team! appreciated")
-  )
-  request_body_json <- toJSON(list(documents = request_body), auto_unbox = TRUE) 
-  require(httr)
+  # request_body <- data.frame(
+  #   language = c("en","en"),
+  #   id = c("1","2"),
+  #   text = c("This is wasted! I'm angry","This is awesome! Good Job Team! appreciated")
+  # )
+  
+  request_body_json <- toJSON(list(documents = as.data.frame(jsonInput[10:15,])), auto_unbox = TRUE) 
+  request_body_json <- str_replace(request_body_json, coll('{"documents":['), getjsonHeader())
+  request_body_json <- str_replace(request_body_json, coll(']}')            , getjsonFooter())
+                            
   result <- POST("https://westus.api.cognitive.microsoft.com/text/analytics/v2.0/sentiment",
                  body = request_body_json,
                  add_headers(.headers = c("Content-Type"="application/json","Ocp-Apim-Subscription-Key"="my_subscrition_key")))
