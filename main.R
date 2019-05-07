@@ -42,12 +42,71 @@ write.csv(cleanData
 
 #train duplicates finding
 
-#validate addresses
+
+
+#validate addresses and store in a separate permanent store
+
 #using Bpost: works in postman, fails here curl::curl_fetch_memory(url, handle = handle) :Failure when receiving data from the peer
-jsonBody <- buildBpostValidateJsonBody(cleanData[1001:1010,])
-postMultipleBpostValidationRest(jsonBody)
+# jsonBody <- buildBpostValidateJsonBody(cleanData[1001:1001,])
+# postMultipleBpostValidationRest(jsonBody)
 
 mapIdtoAddress <- buildGoogleApiGeocodeJsonUrlEncode(cleanData)
+write.csv(mapIdtoAddress
+          , file = paste(paste('..',parameters$batch_name, sep = '/'), parameters$path_geocoded_address, sep = '/')  %>%
+            paste("mapIdtoAddress.csv", sep = "/")  
+          , row.names = TRUE
+          , quote = FALSE)
+
+
 uniqueAddress <- as.data.table(unique(mapIdtoAddress$Address))[, .(Address = V1)]
-geocodedAddress <- uniqueAddress[1:10, .(Address, lapply(Address, getSingleGoogleGeocodingRest))]
+#TO DO: check uniqueAddress against data store of validated addresses
+
+#initialize 
+geocodedAddress <- geocodedAddress[0,]
+
+#submit addresses that were not matched 
+browser()
+
+for(i in 1:floor(nrow(uniqueAddress)/ parameters$fetch_size)){
+  geocodedAddressBuffer <- uniqueAddress[(((i-1)*parameters$fetch_size)+1):(i*parameters$fetch_size), .(Address, lapply(Address, getSingleGoogleGeocodingRest))]
+#  print('debug API call finished ')
+  geocodedAddressBuffer[, c("address_validated", "latitude", "longitude", "location_type", "status") := tstrsplit(V2, "|", fixed=TRUE)]
+  geocodedAddressBuffer[, V2:= NULL]
+  print('debug iteration ')
+  print(i)  
+  print('nr records ')
+  print(dim(geocodedAddressBuffer))  
+  
+  write.csv(geocodedAddress
+            , file = paste(paste('..',parameters$batch_name, sep = '/'), parameters$path_geocoded_address, sep = '/')  %>%
+              paste(i, sep = "/")  %>%
+              paste("geocodedAddress.csv" ,sep='_') 
+              
+            , row.names = TRUE
+            , quote = FALSE)
+#  print('debug write csv finished ')
+  geocodedAddress <- rbindlist(list(geocodedAddress, geocodedAddressBuffer), idcol = FALSE, fill =FALSE , use.names = TRUE)
+  }
+write.csv(geocodedAddress
+          , file = paste(paste('..',parameters$batch_name, sep = '/'), parameters$path_geocoded_address, sep = '/')  %>%
+            paste("geocodedAddress.csv", sep = "/")  
+          , row.names = TRUE
+          , quote = FALSE)
+
+#merge with id
+validated_data <- merge(geocodedAddress, mapIdtoAddress , by='Address', all.y=all) 
+write.csv(validated_data
+          , file = paste(paste('..',parameters$batch_name, sep = '/'), parameters$path_geocoded_address, sep = '/')  %>%
+            paste("geocodedAddress.csv", sep = "/")  
+          , row.names = TRUE
+          , quote = FALSE)
+
+
+
 geocodedAddress2 <- uniqueAddress[11:1000, .(Address, lapply(Address, getSingleGoogleGeocodingRest))]
+
+
+#store Address mapping and coordinates
+
+
+View(matrix(unlist(geocodedAddress), nrow=length(geocodedAddress), byrow=T))

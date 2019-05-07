@@ -321,5 +321,21 @@ getSingleGoogleGeocodingRest <- function(address){
   urlFromParts <- paste(urlFromParts, parameters$google_api_key,sep='')
   result <- GET(urlFromParts)
   stop_for_status(result)
-  content(result,"text")
+  dfBuffer <- content(result,"parsed")
+  if(length(dfBuffer$results) > 0){
+    paste(dfBuffer$results[[1]]$formatted_address
+          ,dfBuffer$results[[1]]$geometry$location$lat 
+          ,dfBuffer$results[[1]]$geometry$location$lng
+          ,dfBuffer$results[[1]]$geometry$location_type
+          ,dfBuffer$status
+          ,sep = '|')
+  }
+  else {
+    paste( NA
+          ,NA 
+          ,NA
+          ,NA
+          ,dfBuffer$status
+          ,sep = '|')
+  }
 }

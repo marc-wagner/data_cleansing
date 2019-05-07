@@ -40,12 +40,16 @@ cleanRawData <- function(dt, check_dt= NULL){
     }
   }
     
+  print('records with no id')
+  View(dt[is.na(id),])
+
   
-  
-  table(table(rawData$page, useNA = 'ifany'))
-  
-  print(table(rawData[,country]))
-  print(table(rawData[,reason]))
+  print('page count')
+  print(table(table(dt$page, useNA = 'ifany')))
+  print('country count')  
+  print(table(dt[,country],  useNA = 'ifany'))
+  print('reason count')
+  print(table(dt[,reason], useNA = 'ifany'))
   
   #alter data to cleanse for future processing
   cleanData <- copy(dt) 
@@ -62,5 +66,16 @@ cleanRawData <- function(dt, check_dt= NULL){
   
   #remove records with no id
   cleanData <- cleanData[!is.na(id),]
+  
+  print('number of unique ids that are not duplicates')
+  length(rawData[!is.na(id) & !reason %in% c('D'),id])
+  length(cleanData[,id])
+  
+  #cleanse country: mostly due to escel import, so Belgium as default looks great.
+  
+  #invert zip and locality if appropriate
+  
+  #eyeball data to setup some other rules
+  cleanData
   
 }
