@@ -10,31 +10,15 @@ print('start')
 rawData <- readRawDataFolder(path = paste( paste ( '..',  parameters$batch_name, sep='/') , parameters$path_input_data, sep='/'))
 #data contains lots of NA lines, corresponding to empty XLS lines.
 
+
 #cleanse data
 #had to preprocess data: remove quotes " and add a semicolon (extra field) at the end of column names
-check_data <- read.csv(  file = paste('..' , parameters$batch_name, sep = '/')  %>%
-                                paste('Data', sep = '/')  %>%
-                                paste(parameters$batch_name, sep = '/') %>%
-                                paste('_noQuotes.csv', sep = '')
-                        ,header = TRUE
-                        , sep = ";"
-                        , quote = ""
-                        , encoding="UTF-8"
-                        , stringsAsFactors=FALSE)  %>%
-              as.data.table()
+check_data <- readCsvFromDirectory(paste(parameters$batch_name, 'noQuotes', sep = '_'), 'Data')
+
 cleanData <- cleanRawData(rawData, check_data)
 
 #store collection
-write.csv(cleanData
-          , file = paste(parameters$batch_root, parameters$path_dataQualityCheck, sep = '/')  %>%
-                   paste("concatenated_raw_data.csv", sep = "/")  
-          , append = FALSE
-          , row.names = TRUE
-          , quote = FALSE)
-
-
-
-
+writeCsvIntoDirectory(cleanData, 'concatenated_raw_data', parameters$path_dataQualityCheck)
 
 #classify errors
 
@@ -51,12 +35,7 @@ write.csv(cleanData
 # postMultipleBpostValidationRest(jsonBody)
 
 mapIdtoAddress <- buildGoogleApiGeocodeJsonUrlEncode(cleanData)
-write.csv(mapIdtoAddress
-          , file = paste(paste('..',parameters$batch_name, sep = '/'), parameters$path_geocoded_address, sep = '/')  %>%
-            paste("mapIdtoAddress.csv", sep = "/")  
-          , row.names = TRUE
-          , quote = FALSE)
-
+writeCsvIntoDirectory(mapIdtoAddress, 'mapIdtoAddress', parameters$path_geocoded_address)
 
 uniqueAddress <- as.data.table(unique(mapIdtoAddress$Address))[, .(Address = V1)]
 #TO DO: check uniqueAddress against data store of validated addresses
@@ -65,9 +44,8 @@ uniqueAddress <- as.data.table(unique(mapIdtoAddress$Address))[, .(Address = V1)
 geocodedAddress <- geocodedAddress[0,]
 
 #submit addresses that were not matched 
-browser()
 
-for(i in 1:floor(nrow(uniqueAddress)/ parameters$fetch_size)){
+for(i in 79:floor(nrow(uniqueAddress)/ parameters$fetch_size)){
   geocodedAddressBuffer <- uniqueAddress[(((i-1)*parameters$fetch_size)+1):(i*parameters$fetch_size), .(Address, lapply(Address, getSingleGoogleGeocodingRest))]
 #  print('debug API call finished ')
   geocodedAddressBuffer[, c("address_validated", "latitude", "longitude", "location_type", "status") := tstrsplit(V2, "|", fixed=TRUE)]
@@ -77,7 +55,7 @@ for(i in 1:floor(nrow(uniqueAddress)/ parameters$fetch_size)){
   print('nr records ')
   print(dim(geocodedAddressBuffer))  
   
-  write.csv(geocodedAddress
+  write.csv2(geocodedAddressBuffer
             , file = paste(paste('..',parameters$batch_name, sep = '/'), parameters$path_geocoded_address, sep = '/')  %>%
               paste(i, sep = "/")  %>%
               paste("geocodedAddress.csv" ,sep='_') 
@@ -87,14 +65,14 @@ for(i in 1:floor(nrow(uniqueAddress)/ parameters$fetch_size)){
 #  print('debug write csv finished ')
   geocodedAddress <- rbindlist(list(geocodedAddress, geocodedAddressBuffer), idcol = FALSE, fill =FALSE , use.names = TRUE)
   }
-write.csv(geocodedAddress
+write.csv2(unique(geocodedAddress)
           , file = paste(paste('..',parameters$batch_name, sep = '/'), parameters$path_geocoded_address, sep = '/')  %>%
             paste("geocodedAddress.csv", sep = "/")  
           , row.names = TRUE
           , quote = FALSE)
 
 #merge with id
-validated_data <- merge(geocodedAddress, mapIdtoAddress , by='Address', all.y=all) 
+validated_data <- merge(geocodedAddress, mapIdtoAddress) 
 write.csv(validated_data
           , file = paste(paste('..',parameters$batch_name, sep = '/'), parameters$path_geocoded_address, sep = '/')  %>%
             paste("geocodedAddress.csv", sep = "/")  

@@ -13,6 +13,8 @@ library("httr")
 #library("RCurl")
 library("XML")
 library("jsonlite")
+library("fst")
+
 
 parameters <- config::get(file = "../parameters.yml")
 

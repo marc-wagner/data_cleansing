@@ -79,3 +79,49 @@ cleanRawData <- function(dt, check_dt= NULL){
   cleanData
   
 }
+
+writeCsvIntoDirectory <- function(dt, filename, directory){
+  file = paste('..',parameters$batch_name, sep = '/') %>% 
+    paste( directory, sep = '/')  %>%
+    paste(filename, sep = "/")  %>%
+    paste("csv", sep = ".")
+  
+  write.csv2(dt , file, row.names = TRUE , quote = FALSE)
+  file.exists(file)
+}
+
+writeFstIntoDirectory <- function(dt, filename, directory){
+  file = paste('..',parameters$batch_name, sep = '/') %>% 
+    paste( directory, sep = '/')  %>%
+    paste(filename, sep = "/")  %>%
+    paste("fst", sep = ".")
+  
+  write.fst(dt , file)
+  file.exists(file)
+}
+
+
+
+readCsvFromDirectory <- function(filename, directory){
+  read.csv(  file = paste('..' , parameters$batch_name, sep = '/')  %>%
+                           paste(directory, sep = '/')  %>%
+                           paste(filename, sep = '/') %>%
+                           paste('csv', sep = '.')
+                         ,header = TRUE
+                         , sep = ";"
+                         , quote = ""
+                         , encoding="UTF-8"
+                         , stringsAsFactors=FALSE)  %>%
+          as.data.table()
+}
+
+readFstFromDirectory <- function(filename, directory){
+  browser()
+  read.fst( paste('..' , parameters$batch_name, sep = '/')  %>%
+               paste(directory, sep = '/')  %>%
+               paste(filename, sep = '/') %>%
+               paste('fst', sep = '.')
+             ,
+           )  %>%
+    as.data.table()
+}
