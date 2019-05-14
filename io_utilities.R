@@ -9,7 +9,8 @@ readRawData <- function(filename) {
                       ,progress = readxl_progress()
                       ,trim_ws = TRUE
                       ,guess_max = 10000
-                      ,col_types = 'text')   %>% as.data.table()
+                      ,col_types = 'text'
+                      ,)   %>% as.data.table()
 }
 
 readRawDataFolder <- function(path) {
@@ -71,7 +72,9 @@ cleanRawData <- function(dt, check_dt= NULL){
   length(rawData[!is.na(id) & !reason %in% c('D'),id])
   length(cleanData[,id])
   
-  #cleanse country: mostly due to escel import, so Belgium as default looks great.
+  
+  #cleanse country: mostly due to excel import, so Belgium as default looks great.
+  cleanData[is.na(country), country:='Belgium']
   
   #invert zip and locality if appropriate
   
@@ -86,7 +89,7 @@ writeCsvIntoDirectory <- function(dt, filename, directory){
     paste(filename, sep = "/")  %>%
     paste("csv", sep = ".")
   
-  write.csv2(dt , file, row.names = TRUE , quote = FALSE)
+  write.csv2(dt , file, row.names = TRUE , quote = FALSE,  fileEncoding='UTF-8' )
   file.exists(file)
 }
 
@@ -96,11 +99,9 @@ writeFstIntoDirectory <- function(dt, filename, directory){
     paste(filename, sep = "/")  %>%
     paste("fst", sep = ".")
   
-  write.fst(dt , file)
+  write.fst(dt , file, uniform_encoding = FALSE)
   file.exists(file)
 }
-
-
 
 readCsvFromDirectory <- function(filename, directory){
   read.csv(  file = paste('..' , parameters$batch_name, sep = '/')  %>%
@@ -116,7 +117,6 @@ readCsvFromDirectory <- function(filename, directory){
 }
 
 readFstFromDirectory <- function(filename, directory){
-  browser()
   read.fst( paste('..' , parameters$batch_name, sep = '/')  %>%
                paste(directory, sep = '/')  %>%
                paste(filename, sep = '/') %>%

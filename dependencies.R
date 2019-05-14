@@ -14,6 +14,8 @@ library("httr")
 library("XML")
 library("jsonlite")
 library("fst")
+library("odbc")
+library("RODBC")
 
 
 parameters <- config::get(file = "../parameters.yml")

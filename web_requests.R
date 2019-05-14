@@ -202,17 +202,6 @@ buildXml <- function(dt){
   
 }
 
-getjsonHeader <-function() {  
-   '{"ValidateAddressesRequest": { "AddressToValidateList": { "AddressToValidate": ['
- # '{ValidateAddressesRequest: { AddressToValidateList: { AddressToValidate: ['
-}
-
-getjsonFooter <-function() {  
-  # add 2 extra } at beginning to close the last item in enumeration due to replacement  of 
-  # AddressBlockLines":"' by '"AddressBlockLines":{"UnstructuredAddressLine": {"*body
-  '}}]   }, "CallerIdentification": {  "CallerName": "klimaatzaak" } } }'
- }
-
 buildBpostValidateJsonBody <- function(dt){
    
   jsonInput <- copy(dt)
@@ -283,12 +272,6 @@ buildBpostValidateJsonBody <- function(dt){
   request_body_json
 }
 
-buildGoogleApiGeocodeJsonUrlEncode <- function(dt){
-  jsonInput <- copy(dt)
-  jsonInput[is.na(jsonInput)] <- ''  #replace NAs by blanks for building address
-  jsonInput <- jsonInput[, paste(c(address,street_nb, address2, ',' ,zip, locality, country), collapse = '+') ,by = id] 
-  jsonInput <- jsonInput[, .(id, Address = str_replace_all(V1, fixed(' '), '+'))]
- }
 
 #https://stackoverflow.com/questions/39809117/how-to-post-api-in-r-having-header-json-body
 
@@ -316,26 +299,3 @@ postMultipleBpostValidationRest <- function(body){
   content(result)
 }
 
-getSingleGoogleGeocodingRest <- function(address){
-  urlFromParts <- str_replace("https://maps.googleapis.com/maps/api/geocode/json?address=XXXXXXXXX&key=", fixed('XXXXXXXXX'),address)
-  urlFromParts <- paste(urlFromParts, parameters$google_api_key,sep='')
-  result <- GET(urlFromParts)
-  stop_for_status(result)
-  dfBuffer <- content(result,"parsed")
-  if(length(dfBuffer$results) > 0){
-    paste(dfBuffer$results[[1]]$formatted_address
-          ,dfBuffer$results[[1]]$geometry$location$lat 
-          ,dfBuffer$results[[1]]$geometry$location$lng
-          ,dfBuffer$results[[1]]$geometry$location_type
-          ,dfBuffer$status
-          ,sep = '|')
-  }
-  else {
-    paste( NA
-          ,NA 
-          ,NA
-          ,NA
-          ,dfBuffer$status
-          ,sep = '|')
-  }
-}
