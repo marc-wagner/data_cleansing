@@ -9,8 +9,12 @@ source('geocode.R')
 #load source files
 print('start')
 rawData <- readRawDataFolder(path = paste( paste ( '..',  parameters$batch_name, sep='/') , parameters$path_input_data, sep='/'))
-#data contains lots of NA lines, corresponding to empty XLS lines.
 
+#identify duplicates
+#train duplicates finding
+
+
+#data contains lots of NA lines, corresponding to empty XLS lines.
 
 #cleanse data
 #had to preprocess data: remove quotes " and add a semicolon (extra field) at the end of column names
@@ -23,9 +27,6 @@ writeCsvIntoDirectory(cleanData, 'concatenated_raw_data', parameters$path_dataQu
 
 #classify errors
 
-#identify duplicates
-
-#train duplicates finding
 
 #validate addresses and store in a separate permanent store
 

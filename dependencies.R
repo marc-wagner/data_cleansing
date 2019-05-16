@@ -1,5 +1,4 @@
 # general purpose
-library("glue")
 library("config")
 library("magrittr")
 library("data.table")
@@ -17,10 +16,14 @@ library("fst")
 library("odbc")
 library("RODBC")
 
+#classification
+library("RecordLinkage")
 
 parameters <- config::get(file = "../parameters.yml")
 
-# general purpose
+
+#general purpose
+#library("glue")
 #library("readr")
 #library("lubridate")
 

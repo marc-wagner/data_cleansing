@@ -6,7 +6,6 @@ readRawData <- function(filename) {
                       ,range = "R1C1:R12000C39"
                       ,sheet = 1
                       ,col_names = TRUE
-                      ,progress = readxl_progress()
                       ,trim_ws = TRUE
                       ,guess_max = 10000
                       ,col_types = 'text'
@@ -29,7 +28,8 @@ readRawDataFolder <- function(path) {
 cleanRawData <- function(dt, check_dt= NULL){
   
   #1) non altering checks for data quality
-  browser()
+  
+  
   #check completeness
   
   #expected nr records for batch001: 45944 
@@ -63,14 +63,16 @@ cleanRawData <- function(dt, check_dt= NULL){
   #nr of unique id's and guids'
   
   #remove duplicates and errors 
-  cleanData <- cleanData[reason %in% c('BV', 'C') | is.na(reason),]
+  #temporarily leaving duplicates in there.
+  #cleanData <- cleanData[reason %in% c('BV', 'C') | is.na(reason),]
   
   #remove records with no id
   cleanData <- cleanData[!is.na(id),]
   
-  print('number of unique ids that are not duplicates')
+  print('number of unique ids that are not duplicates in raw data:')
   length(rawData[!is.na(id) & !reason %in% c('D'),id])
-  length(cleanData[,id])
+  print('number of records in clean data:')
+    length(cleanData[,id])
   
   
   #cleanse country: mostly due to excel import, so Belgium as default looks great.
@@ -80,7 +82,6 @@ cleanRawData <- function(dt, check_dt= NULL){
   
   #eyeball data to setup some other rules
   cleanData
-  
 }
 
 writeCsvIntoDirectory <- function(dt, filename, directory){
