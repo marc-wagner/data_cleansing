@@ -51,7 +51,7 @@ mapIdtoAddressValidated <- geocodeAddress(mapIdtoAddress , get_new = FALSE)
 geocodedData <- base::merge(cleanData, mapIdtoAddressValidated)
 writeCsvIntoDirectory(geocodedData, 'geocoded_data', parameters$path_forupload)
 
-
+dedupData <- deduplicate(geocodedData)
 
 
 #store Address mapping and coordinates
