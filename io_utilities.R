@@ -106,6 +106,23 @@ cleanRawData <- function(dt, check_dt= NULL){
     print('reason count')
     print(table(dt[,reason], useNA = 'ifany'))
   
+    print('has_warning count')
+    print(table(cleanData$has_warning , useNA = 'ifany' ))
+    
+    print('has_address_warning count')
+    print(table(cleanData$has_address_warning , useNA = 'ifany' ))
+    
+    print('has_dob_warning count')
+    print(table(cleanData$has_dob_warning , useNA = 'ifany' ))
+    
+    print('has_email_warning count') 
+    print(table(cleanData$has_email_warning , useNA = 'ifany' ))
+    
+    print('has_duplicate_warning count') 
+    print(table(cleanData$has_duplicate_warning , useNA = 'ifany' ))
+    
+    print('has_language_warning count') 
+    print(table(cleanData$has_language_warning , useNA = 'ifany' ))
     
   #1) Modification to data to increase quality  
     
@@ -135,11 +152,18 @@ cleanRawData <- function(dt, check_dt= NULL){
   
   browser()
   
-  #invert zip and locality if appropriate
-  cleanData[is.numeric(locality) & (is.na(zip) | !is.numeric(zip) )  , reason:='C']
-  cleanData[is.numeric(locality) & (is.na(zip) | !is.numeric(zip) )  , zipbuffer:=locality]
-  cleanData[is.numeric(locality) &               !is.numeric(zip)    , locality:=zip]
-  cleanData[is.numeric(locality) & (is.na(zip) | !is.numeric(zip) )  , zip := zipbuffer]
+  #invert zip and locality if appropriate 
+  cleanData[(!grepl("[^A-Za-z]", zip ) | is.na(zip)) & (!grepl("[^0-9]", locality ) | is.na(locality)) , swapbuffer := zip]
+  cleanData[!is.na(swapbuffer) & is.na(reason), reason := 'C']
+  cleanData[!is.na(swapbuffer), zip := locality]
+  cleanData[!is.na(swapbuffer), locality := swapbuffer]
+  cleanData[, swapbuffer := NULL]
+  
+  
+  #extract zip from locality
+  cleanData[ as.integer(substr(locality,1,4)) >= 1000  & as.integer(substr(locality,1,4)) <= 9999, zipbuffer:= as.integer(substr(locality,1,4)) ]
+  cleanData[!is.na(zipbuffer)  , reason:='C'] #flag as manual correction
+  cleanData[!(as.integer(zip) >= 1000  & as.integer(zip) <= 9999), zip:= zipbuffer]
   cleanData[, zipbuffer := NULL]
   
   #cleanse country: if zip code is not 4 digits numeric, flag it for review because country needs fixing
@@ -150,7 +174,8 @@ cleanRawData <- function(dt, check_dt= NULL){
   cleanData[is.na(country), reason:='C']
   cleanData[is.na(country), country:='Belgium']
   
-
+  #flag all records that have a warning for manual review
+  cleanData[has_warning ==1 & is.na(reason) , reason:='M']
   
   #eyeball data to setup some other rules
   cleanData

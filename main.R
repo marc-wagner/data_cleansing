@@ -1,6 +1,13 @@
 #main file for data cleansing of subscriber list
 #built under GNU General Public License
 
+#classification of processing types stored in column 'reason'
+#
+# D duplicate to be discarded. the corresponding record does not have that tag
+# E error, should be discarded
+# C correction, either manual or through automated cleansing. should overwrite what comes from source.
+# M flagged for manual processing.
+
 source('dependencies.R')
 source('io_utilities.R')
 source('geocode.R')
