@@ -6,41 +6,47 @@ source('io_utilities.R')
 source('geocode.R')
 
 
-#load source files
+#1) Extract latest records
+
+result <- dbSendQuery(con,  "SELECT * FROM plaintiff_latest")
+raw_data <- as.data.table(dbFetch(result))  #dbFetch(result, n = 100)
+raw_data$procuration_date <- as.Date(raw_data$procuration_date)
+
+
+#2) Transform: x-check and cleanse data
+
+#load manually deduplicated and corrected source files
 print('start')
-rawData <- readRawDataFolder(path = paste( paste ( '..',  parameters$batch_name, sep='/') , parameters$path_input_data, sep='/'))
+manual_fixes <- readRawDataFolder(path = paste( paste ( '..',  parameters$batch_name, sep='/') , parameters$path_input_data, sep='/'))
 
-#identify duplicates
-#train duplicates finding
+#replace records by manual fixes
+raw_data <- blendData(raw_data, manual_fixes)
 
-
-#data contains lots of NA lines, corresponding to empty XLS lines.
-
-#cleanse data
+#load intput files to manual cleanup : check that nothing got lost in the process
 #had to preprocess data: remove quotes " and add a semicolon (extra field) at the end of column names
 check_data <- readCsvFromDirectory(paste(parameters$batch_name, 'noQuotes', sep = '_'), 'Data')
 
-cleanData <- cleanRawData(rawData, check_data)
+cleanData <- cleanRawData(raw_data, check_data)
+
 
 #store collection
 writeCsvIntoDirectory(cleanData, 'concatenated_raw_data', parameters$path_dataQualityCheck)
 
-#classify errors
 
+#classify errors
+#TO DO
 
 #validate addresses and store in a separate permanent store
-
 mapIdtoAddress <- buildGoogleApiGeocodeJsonUrlEncode(cleanData)
 writeCsvIntoDirectory(mapIdtoAddress, 'mapIdtoAddress', parameters$path_geocoded_address)
-
 mapIdtoAddressValidated <- geocodeAddress(mapIdtoAddress , get_new = FALSE)
-
 geocodedData <- base::merge(cleanData, mapIdtoAddressValidated)
 writeCsvIntoDirectory(geocodedData, 'geocoded_data', parameters$path_forupload)
 
-library(DBI)
-con <- dbConnect(odbc::odbc(), parameters$db_connection, timeout = 10)
 
+
+
+plaintiff_latest <- dbReadTable(con, "plaintiff_latest")
 rodbcChannel <- RODBC::odbcConnect(parameters$db_connection )
 
 sqlSave(rodbcChannel, geocodedData, tablename = 'plaintiffs_geocoded_batch001') #, append = FALSE,  rownames = FALSE, colnames = TRUE)
@@ -56,3 +62,9 @@ cat(query)
 
 
 View(matrix(unlist(geocodedAddress), nrow=length(geocodedAddress), byrow=T))
+
+
+
+#final checks: data complete, no NA's left on relevant fields?
+finalCheck <- 0
+base::stopifnot(finalCheck != 1) 

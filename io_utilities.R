@@ -1,6 +1,9 @@
 #IO utilities
 
+#DB connection
+con <- dbConnect(odbc::odbc(), parameters$db_connection, timeout = 10)
 
+#read an individual excel file
 readRawData <- function(filename) {
     readxl::read_excel(filename
                       ,range = "R1C1:R12000C39"
@@ -12,7 +15,9 @@ readRawData <- function(filename) {
                       ,)   %>% as.data.table()
 }
 
+#traverse folder with manually curated excel files
 readRawDataFolder <- function(path) {
+  
   files_in_folder <- list.files(path = path
                                 ,full.names = TRUE
                                 ,pattern = ".xlsx$")
@@ -22,22 +27,71 @@ readRawDataFolder <- function(path) {
         rbindlist(list(copy(databuffer), data), fill = FALSE, idcol = NULL)
     } else databuffer
   }
+
+  #remove records without an id
+  data <- data[!is.na(id),]
+  
+  #assign proper types
+  data[, id := as.integer(id)]
+  data[,dob := as.Date('1900-01-01')+ as.integer(dob) - 2]
+  data[,procuration_date := as.Date('1900-01-01')+ as.integer(procuration_date) - 2]
+  colToInt <- c( 'newsletter',
+                 'is_public',
+                 'is_complete',
+                 'is_paper',
+                 'is_imported_from_excel',
+                 'is_not_minor_anymore',
+                 'has_warning',
+                 'has_email_warning',
+                 'has_address_warning',
+                 'has_dob_warning',
+                 'is_minor',
+                 'has_profession_warning',
+                 'has_newsletter_or_public_warning',
+                 'has_duplicate_warning',
+                 'has_language_warning'    )
+  for(i in colToInt) {
+    data[[i]] <- as.numeric(data[[i]])
+  }
+  
   data
 }
 
+#replace records by manual fixes if matched on ids
+#set duplicate_id and reason to NA for new records
+blendData <- function(raw_data, manual_fixes){
+
+  manual_id_exist <- as.data.table(copy(manual_fixes[, id]))
+  manual_id_exist[, id_exists := 1]
+  manual_id_exist <- manual_id_exist[,.(id = V1, id_exists)]
+  new_records <- base::merge(raw_data, manual_id_exist,   all.x = TRUE )
+  new_records <- new_records[is.na(id_exists),]  
+  new_records[, id_exists := NULL]
+  
+  table(rbindlist(list(new_records, manual_fixes), use.names =  TRUE, idcol = FALSE, fill=TRUE)$reason, useNA = 'ifany')
+  rbindlist(list(new_records, manual_fixes), use.names =  TRUE, idcol = FALSE, fill=TRUE)
+  #small diff : raw_data  = 62004 records, manual_fixes = 43335 records, new_records = 18671 records
+  #checksum 43335 + 18671 = 62006 records. 2 records diff
+}
+
+
 cleanRawData <- function(dt, check_dt= NULL){
   
+  browser()
   #1) non altering checks for data quality
   
   
-  #check completeness
-  
-  #expected nr records for batch001: 45944 
+  #check completeness: obsolete, as we will continue with the manual fixes as they are, for better or worse.
+  #expected nr records for batch001: 45944 , to be checked against manual fixes (have page number)
   print(nrow(dt))
   if(!is.null(check_dt)){
-    if(nrow(dt[!is.na(id),]) != nrow(check_dt[!is.na(check_dt$id),])){
-      check_dt[, id:=as.character(id)]
-      diff_raw_cleansed <- base::merge(check_dt, dt, by='id', all.x = T)
+ 
+    if(nrow(dt[!is.na(id) & !is.na(page),]) != nrow(check_dt[!is.na(check_dt$id),])){
+      print("WARNING: difference in record count: input to manual fixes:")
+      print( nrow(check_dt[!is.na(check_dt$id),]) )
+      print("output of manual fixes:")
+      print(nrow(dt[!is.na(id) & !is.na(page),]))
+      #diff_raw_cleansed <- base::merge(check_dt, dt, by='id', all.x = T)
     }
   }
     

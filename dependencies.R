@@ -13,6 +13,7 @@ library("httr")
 library("XML")
 library("jsonlite")
 library("fst")
+library("DBI")
 library("odbc")
 library("RODBC")
 
