@@ -15,7 +15,7 @@ getjsonFooter <-function() {
 
 
 buildGoogleApiGeocodeJsonUrlEncode <- function(dt){
-  jsonInput <- copy(dt)
+  jsonInput <- copy(dt[,.(id, address,street_nb, address2,zip, locality, country)])
   jsonInput[is.na(jsonInput)] <- ''  #replace NAs by blanks for building address
   jsonInput <- jsonInput[, paste(c(address,street_nb, address2, ',' ,zip, locality, country), collapse = '+') ,by = id] 
   jsonInput <- jsonInput[, .(id, Address = str_replace_all(V1, fixed(' '), '+'))]

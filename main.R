@@ -4,6 +4,8 @@
 source('dependencies.R')
 source('io_utilities.R')
 source('geocode.R')
+source('RecordLinkage.R')
+
 
 
 #1) Extract latest records
@@ -28,7 +30,6 @@ check_data <- readCsvFromDirectory(paste(parameters$batch_name, 'noQuotes', sep 
 
 cleanData <- cleanRawData(raw_data, check_data)
 
-
 #store collection
 writeCsvIntoDirectory(cleanData, 'concatenated_raw_data', parameters$path_dataQualityCheck)
 
@@ -44,18 +45,6 @@ geocodedData <- base::merge(cleanData, mapIdtoAddressValidated)
 writeCsvIntoDirectory(geocodedData, 'geocoded_data', parameters$path_forupload)
 
 
-
-
-plaintiff_latest <- dbReadTable(con, "plaintiff_latest")
-rodbcChannel <- RODBC::odbcConnect(parameters$db_connection )
-
-sqlSave(rodbcChannel, geocodedData, tablename = 'plaintiffs_geocoded_batch001') #, append = FALSE,  rownames = FALSE, colnames = TRUE)
-
-
-cat(query)
-
-  
-  dbGetQuery(con, query)
 
 
 #store Address mapping and coordinates

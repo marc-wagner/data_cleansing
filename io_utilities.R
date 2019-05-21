@@ -77,37 +77,44 @@ blendData <- function(raw_data, manual_fixes){
 
 cleanRawData <- function(dt, check_dt= NULL){
   
-  browser()
   #1) non altering checks for data quality
   
-  
-  #check completeness: obsolete, as we will continue with the manual fixes as they are, for better or worse.
-  #expected nr records for batch001: 45944 , to be checked against manual fixes (have page number)
-  print(nrow(dt))
-  if(!is.null(check_dt)){
- 
-    if(nrow(dt[!is.na(id) & !is.na(page),]) != nrow(check_dt[!is.na(check_dt$id),])){
-      print("WARNING: difference in record count: input to manual fixes:")
-      print( nrow(check_dt[!is.na(check_dt$id),]) )
-      print("output of manual fixes:")
-      print(nrow(dt[!is.na(id) & !is.na(page),]))
-      #diff_raw_cleansed <- base::merge(check_dt, dt, by='id', all.x = T)
+    #check completeness: obsolete, as we will continue with the manual fixes as they are, for better or worse.
+    #expected nr records for batch001: 45944 , to be checked against manual fixes (have page number)
+    print(nrow(dt))
+    if(!is.null(check_dt)){
+   
+      if(nrow(dt[!is.na(id) & !is.na(page),]) != nrow(check_dt[!is.na(check_dt$id),])){
+        print("WARNING: difference in record count: input to manual fixes:")
+        print( nrow(check_dt[!is.na(check_dt$id),]) )
+        print("output of manual fixes:")
+        print(nrow(dt[!is.na(id) & !is.na(page),]))
+        #diff_raw_cleansed <- base::merge(check_dt, dt, by='id', all.x = T)
+      }
     }
-  }
+      
+    if(nrow(dt[is.na(id),]) != 0){
+      print('records with no id: ')
+      print(nrow(dt[is.na(id),]))
+      View(dt[is.na(id),])
+    }  
     
-  print('records with no id')
-  View(dt[is.na(id),])
-
+    print('page count')
+    print(table(table(dt$page, useNA = 'ifany')))
+    print('country count')  
+    print(table(dt[,country],  useNA = 'ifany'))
+    print('reason count')
+    print(table(dt[,reason], useNA = 'ifany'))
   
-  print('page count')
-  print(table(table(dt$page, useNA = 'ifany')))
-  print('country count')  
-  print(table(dt[,country],  useNA = 'ifany'))
-  print('reason count')
-  print(table(dt[,reason], useNA = 'ifany'))
-  
+    
+  #1) Modification to data to increase quality  
+    
   #alter data to cleanse for future processing
   cleanData <- copy(dt) 
+  
+  #remove records with no id
+  cleanData <- cleanData[!is.na(id),]
+  
   #remove address 2 if it is redundant
   cleanData <- cleanData[(coll(address2) == coll(street_nb)) | (coll(address2) == coll(zip)) , address2:= NA]
   cleanData <- cleanData[country == 'BE', country:='Belgium']
@@ -120,19 +127,30 @@ cleanRawData <- function(dt, check_dt= NULL){
   #temporarily leaving duplicates in there.
   #cleanData <- cleanData[reason %in% c('BV', 'C') | is.na(reason),]
   
-  #remove records with no id
-  cleanData <- cleanData[!is.na(id),]
-  
+
   print('number of unique ids that are not duplicates in raw data:')
-  length(rawData[!is.na(id) & !reason %in% c('D'),id])
+  print(length(dt[!is.na(id) & !reason %in% c('D'),id]))
   print('number of records in clean data:')
-    length(cleanData[,id])
+  print(length(cleanData[,id]))
   
-  
-  #cleanse country: mostly due to excel import, so Belgium as default looks great.
-  cleanData[is.na(country), country:='Belgium']
+  browser()
   
   #invert zip and locality if appropriate
+  cleanData[is.numeric(locality) & (is.na(zip) | !is.numeric(zip) )  , reason:='C']
+  cleanData[is.numeric(locality) & (is.na(zip) | !is.numeric(zip) )  , zipbuffer:=locality]
+  cleanData[is.numeric(locality) &               !is.numeric(zip)    , locality:=zip]
+  cleanData[is.numeric(locality) & (is.na(zip) | !is.numeric(zip) )  , zip := zipbuffer]
+  cleanData[, zipbuffer := NULL]
+  
+  #cleanse country: if zip code is not 4 digits numeric, flag it for review because country needs fixing
+  cleanData[!is.numeric(zip) & !is.na(zip) & (as.numeric(zip) < 1000 | as.numeric(zip) > 9999)  , reason:='E']
+  
+  #cleanse country: mostly due to excel import, 
+  #so setting Belgium as default since we filtered on zip code above.
+  cleanData[is.na(country), reason:='C']
+  cleanData[is.na(country), country:='Belgium']
+  
+
   
   #eyeball data to setup some other rules
   cleanData
