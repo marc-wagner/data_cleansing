@@ -47,7 +47,7 @@ writeCsvIntoDirectory(cleanData, 'concatenated_raw_data', parameters$path_dataQu
 #validate addresses and store in a separate permanent store
 mapIdtoAddress <- buildGoogleApiGeocodeJsonUrlEncode(cleanData)
 writeCsvIntoDirectory(mapIdtoAddress, 'mapIdtoAddress', parameters$path_geocoded_address)
-mapIdtoAddressValidated <- geocodeAddress(mapIdtoAddress , get_new = FALSE)
+mapIdtoAddressValidated <- geocodeAddress(mapIdtoAddress , get_new = TRUE)
 geocodedData <- base::merge(cleanData, mapIdtoAddressValidated)
 writeCsvIntoDirectory(geocodedData, 'geocoded_data', parameters$path_forupload)
 
