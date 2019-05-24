@@ -17,33 +17,62 @@ getjsonFooter <-function() {
 buildGoogleApiGeocodeJsonUrlEncode <- function(dt){
   jsonInput <- copy(dt[,.(id, address,street_nb, address2,zip, locality, country)])
   jsonInput[is.na(jsonInput)] <- ''  #replace NAs by blanks for building address
-  jsonInput <- jsonInput[, paste(c(address,street_nb, address2, ',' ,zip, locality, country), collapse = '+') ,by = id] 
-  jsonInput <- jsonInput[, .(id, Address = str_replace_all(V1, fixed(' '), '+'))]
+  jsonOutput <- jsonInput[, .(  Address    = paste(c(address,street_nb, address2, ',' ,zip, locality, country), collapse = '+') 
+                               ,components = paste(c( paste(c('postal_code'  , zip     ), collapse = ':')
+                                        ,paste(c('locality'     , locality), collapse = ':')
+                                        ,paste(c('country'      , country ), collapse = ':')
+                                        )
+                                      , collapse = '|')
+                               ,postal_code = zip
+                               )
+                         ,by = id] 
+  jsonOutput[, Address := str_replace_all(Address, fixed(' '), '+')]
 }
 
 
-getSingleGoogleGeocodingRest <- function(address, language = NULL){
-  if(!is.null(language)) { language_tag <- paste('&language=',language, sep = '')}
-  urlFromParts <- str_replace("https://maps.googleapis.com/maps/api/geocode/json?address=XXXXXXXXX&key=", fixed('XXXXXXXXX'),paste(address, language_tag, sep=''))
-  urlFromParts <- paste(urlFromParts, parameters$google_api_key,sep='')
+getSingleGoogleGeocodingRest <- function(address, components = NULL, postal_code = NULL){
+  browser()
+  #if zip code in Brussels area, set language = fr
+  if(postal_code >= parameters$zip_codes_brussels_region_lowerbound  
+     & postal_code <= parameters$zip_codes_brussels_region_upperbound) 
+  { language_tag <- '&language=fr'} else {language_tag <- ''}
+  
+  #build URL: add address, then optionally language, then components then key
+  urlFromParts <- paste( "https://maps.googleapis.com/maps/api/geocode/json?address", paste(address     , language_tag             , sep='' ),sep='=')  
+  urlFromParts <- paste(urlFromParts                                                , paste('components', components               , sep='='),sep='&')
+  urlFromParts <- paste(urlFromParts                                                , paste('key'       , parameters$google_api_key, sep='='),sep='&')
+  
   result <- GET(urlFromParts)
   stop_for_status(result)
   dfBuffer <- content(result,"parsed")
-  if(length(dfBuffer$results) > 0){
+
+  if(length(dfBuffer$results) == 0) {
+    #retry without components
+    #to handle cases where country= BE is wrong because it s an address abroad
+    urlFromParts <- paste( "https://maps.googleapis.com/maps/api/geocode/json?address", paste(address     , language_tag             , sep='' ),sep='=')  
+    urlFromParts <- paste(urlFromParts                                                , paste('key'       , parameters$google_api_key, sep='='),sep='&')
+
+        result <- GET(urlFromParts)
+    stop_for_status(result)
+    dfBuffer <- content(result,"parsed")
+  }
+  
+  #still no luck
+  if(length(dfBuffer$results) == 0) {
+      paste( NA
+             ,NA 
+             ,NA
+             ,NA
+             ,dfBuffer$status
+             ,sep = '|')
+    }
+  else {
     paste(dfBuffer$results[[1]]$formatted_address
           ,dfBuffer$results[[1]]$geometry$location$lat 
           ,dfBuffer$results[[1]]$geometry$location$lng
           ,dfBuffer$results[[1]]$geometry$location_type
           ,dfBuffer$status
           ,sep = '|')
-  }
-  else {
-    paste( NA
-           ,NA 
-           ,NA
-           ,NA
-           ,dfBuffer$status
-           ,sep = '|')
   }
 }
 
@@ -57,10 +86,9 @@ geocodeAddress <- function(mapIdtoAddress, get_new = TRUE){
 
   #check uniqueAddress against data store of validated addresses  
   #only submit missing addresses for geocoding 
-  uniqueAddress <- as.data.table(unique(mapIdtoAddress$Address))[, .(Address = V1)]
+  uniqueAddress <- unique(mapIdtoAddress[, .(Address, components, postal_code)])
   newUniqueAddress <- base::merge(uniqueAddress, existingGeocodedAddress ,all.x = TRUE )
-  newUniqueAddress <- as.data.table(newUniqueAddress[is.na(address_validated), Address])[,Address:=V1]
-  newUniqueAddress[, V1:=NULL]
+  newUniqueAddress <- newUniqueAddress[is.na(address_validated), .(Address, components, postal_code)]
   
   #initialize 
   geocodedAddress <- existingGeocodedAddress
@@ -69,7 +97,11 @@ geocodeAddress <- function(mapIdtoAddress, get_new = TRUE){
       #submit addresses that were not matched 
       
       for(i in 1:floor(nrow(newUniqueAddress)/ parameters$fetch_size)){
-        geocodedAddressBuffer <- newUniqueAddress[(((i-1)*parameters$fetch_size)+1):(i*parameters$fetch_size), .(Address, lapply(Address, getSingleGoogleGeocodingRest))]
+        geocodedAddressBuffer <- newUniqueAddress[(((i-1)*parameters$fetch_size)+1):(i*parameters$fetch_size)
+                                                  , .(Address, components, lapply(Address
+                                                                                  , getSingleGoogleGeocodingRest
+                                                                                  , components = components
+                                                                                  , postal_code = postal_code))]
         #  print('debug API call finished ')
         geocodedAddressBuffer[, c("address_validated", "latitude", "longitude", "location_type", "status") := tstrsplit(V2, "|", fixed=TRUE)]
         geocodedAddressBuffer[, V2:= NULL]

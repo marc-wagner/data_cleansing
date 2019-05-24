@@ -107,22 +107,22 @@ cleanRawData <- function(dt, check_dt= NULL){
     print(table(dt[,reason], useNA = 'ifany'))
   
     print('has_warning count')
-    print(table(cleanData$has_warning , useNA = 'ifany' ))
+    print(table(dt$has_warning , useNA = 'ifany' ))
     
     print('has_address_warning count')
-    print(table(cleanData$has_address_warning , useNA = 'ifany' ))
+    print(table(dt$has_address_warning , useNA = 'ifany' ))
     
     print('has_dob_warning count')
-    print(table(cleanData$has_dob_warning , useNA = 'ifany' ))
+    print(table(dt$has_dob_warning , useNA = 'ifany' ))
     
     print('has_email_warning count') 
-    print(table(cleanData$has_email_warning , useNA = 'ifany' ))
+    print(table(dt$has_email_warning , useNA = 'ifany' ))
     
     print('has_duplicate_warning count') 
-    print(table(cleanData$has_duplicate_warning , useNA = 'ifany' ))
+    print(table(dt$has_duplicate_warning , useNA = 'ifany' ))
     
     print('has_language_warning count') 
-    print(table(cleanData$has_language_warning , useNA = 'ifany' ))
+    print(table(dt$has_language_warning , useNA = 'ifany' ))
     
   #1) Modification to data to increase quality  
     
@@ -134,7 +134,11 @@ cleanRawData <- function(dt, check_dt= NULL){
   
   #remove address 2 if it is redundant
   cleanData <- cleanData[(coll(address2) == coll(street_nb)) | (coll(address2) == coll(zip)) , address2:= NA]
-  cleanData <- cleanData[country == 'BE', country:='Belgium']
+  #leaving BE as this is what google geoloc expects
+  #https://developers.google.com/maps/documentation/geocoding/intro#ComponentFiltering
+  #country matches a country name or a two letter ISO 3166-1 country code. 
+  #The API follows the ISO standard for defining countries, and the filtering works best when using the corresponding ISO code of the country.
+  #cleanData <- cleanData[country == 'BE', country:='Belgium']
 
   #1000 pages
   
@@ -149,8 +153,6 @@ cleanRawData <- function(dt, check_dt= NULL){
   print(length(dt[!is.na(id) & !reason %in% c('D'),id]))
   print('number of records in clean data:')
   print(length(cleanData[,id]))
-  
-  browser()
   
   #invert zip and locality if appropriate 
   cleanData[(!grepl("[^A-Za-z]", zip ) | is.na(zip)) & (!grepl("[^0-9]", locality ) | is.na(locality)) , swapbuffer := zip]
@@ -171,8 +173,9 @@ cleanRawData <- function(dt, check_dt= NULL){
   
   #cleanse country: mostly due to excel import, 
   #so setting Belgium as default since we filtered on zip code above.
-  cleanData[is.na(country), reason:='C']
-  cleanData[is.na(country), country:='Belgium']
+  #20190524: removed this workaround, letting google geoloc figure out the country.
+  #cleanData[is.na(country), reason:='C']
+  #cleanData[is.na(country), country:='Belgium']
   
   #flag all records that have a warning for manual review
   cleanData[has_warning ==1 & is.na(reason) , reason:='M']

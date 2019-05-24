@@ -32,8 +32,9 @@ deduplicate <- function(dt) {
   summary(result)
   
   # show all record pairs with weights between 0.5 and 0.6
-  duplicatesCertain <- as.data.table(getPairs(rpairs, min.weight=0.4, single.rows=TRUE))
-  export_dups <- unique(duplicatesCertain[duplicate_id.1 != duplicate_id.2,.(id.1, id.2, duplicate_id.1, duplicate_id.2, firstname.1, lastname.1, firstname.2, lastname.2, dob.1, dob.2, address.1, address.2) ])
+  duplicatesCertain <- as.data.table(getPairs(rpairs, min.weight=0.6, single.rows=TRUE))
+  duplicatesCertain <- duplicatesCertain[, .(id.1, id.2, duplicate_id.1, duplicate_id.2, firstname.1, lastname.1, firstname.2, lastname.2, dob.1, dob.2, address.1, address.2, Weight) ]
+  export_dups <- unique(duplicatesCertain[duplicate_id.1 != duplicate_id.2, ])
   writeCsvIntoDirectory(export_dups, 'duplicates_gt40pc', parameters$path_forupload)
   
   # show all links, do not show classification in the output
