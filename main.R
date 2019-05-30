@@ -48,16 +48,36 @@ writeCsvIntoDirectory(cleanData, 'concatenated_raw_data', parameters$path_dataQu
 mapIdtoAddress <- buildGoogleApiGeocodeJsonUrlEncode(cleanData)
 writeCsvIntoDirectory(mapIdtoAddress, 'mapIdtoAddress', parameters$path_geocoded_address)
 mapIdtoAddressValidated <- geocodeAddress(mapIdtoAddress , get_new = parameters$get_new_geocoding)
-geocodedData <- base::merge(cleanData, mapIdtoAddressValidated)
+
+missing_geoloc <- base::merge(cleanData, mapIdtoAddressValidated, all.x = TRUE)[is.na(address_validated),]
+writeCsvIntoDirectory(missing_geoloc, 'missing_geoloc', parameters$path_dataQualityCheck)
+
+geocodedData <- base::merge(cleanData, mapIdtoAddressValidated, all.x = TRUE)
 writeCsvIntoDirectory(geocodedData, 'geocoded_data', parameters$path_forupload)
+writeFstIntoDirectory(geocodedData, 'geocoded_data', parameters$path_forupload)
+
+
+
+#free up memory before deduplication
+rm(raw_data, mapIdtoAddress, mapIdtoAddressValidated, manual_fixes, check_data, cleanData)
 
 dedupData <- deduplicate(geocodedData)
+dedupData[, duplicate_id.x:=NULL]
+dedupData[, duplicate_id := duplicate_id.y]
+dedupData[, duplicate_id.y:=NULL]
+dedupData[!is.na(duplicate_id) , auto_reason := 'D']
 
+writeFstIntoDirectory(dedupData[order(-cluster_id),], 'deduplicated_data', parameters$path_forupload)
 
-#store Address mapping and coordinates
+# hack to get quotes around text that has semicolons, replaces
+# call to writeCsvIntoDirectory(dedupData[order(-cluster_id),], 'deduplicated_data', parameters$path_forupload)
+file = paste('..',parameters$batch_name, sep = '/') %>% 
+  paste( parameters$path_forupload, sep = '/')  %>%
+  paste('deduplicated_data', sep = "/")  %>%
+  paste("csv", sep = ".")
 
-
-View(matrix(unlist(geocodedAddress), nrow=length(geocodedAddress), byrow=T))
+write.csv2(dedupData[order(-cluster_id),.(cluster_id,duplicate_id,auto_reason, page,line,reason, id,firstname,lastname,language,profession,dob,address_validated, address,street_nb,address2,zip,locality,country,phone,email,guid,procuration_date,extra_info,newsletter,is_public,is_complete,sms_code,twilio_reference,is_paper,legacy_data,is_imported_from_excel,is_not_minor_anymore,has_warning,has_email_warning,has_address_warning, has_dob_warning,is_minor,has_profession_warning,has_newsletter_or_public_warning,has_duplicate_warning,has_language_warning,components,postal_code
+)] , file, row.names = TRUE , quote = TRUE,  fileEncoding='UTF-8' )
 
 
 

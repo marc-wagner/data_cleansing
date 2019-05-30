@@ -180,6 +180,10 @@ cleanRawData <- function(dt, check_dt= NULL){
   #flag all records that have a warning for manual review
   cleanData[has_warning ==1 & is.na(reason) , reason:='M']
   
+  
+  #remove semicolon in extra_info , it messes with the csv export
+  cleanData[extra_info == 'N;', extra_info := 'N']
+  
   #eyeball data to setup some other rules
   cleanData
 }
