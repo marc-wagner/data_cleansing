@@ -213,7 +213,8 @@ readCsvFromDirectory <- function(filename, directory){
                          , sep = ";"
                          , quote = ""
                          , encoding="UTF-8"
-                         , stringsAsFactors=FALSE)  %>%
+                         , stringsAsFactors=FALSE
+                         )  %>%
           as.data.table()
 }
 

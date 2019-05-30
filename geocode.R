@@ -54,7 +54,7 @@ getSingleGoogleGeocodingRest <- function(address, components = NULL, postal_code
   urlFromParts <- paste(urlFromParts                                                , paste('components', components               , sep='='),sep='&')
   urlFromParts <- paste(urlFromParts                                                , paste('key'       , parameters$google_api_key, sep='='),sep='&')
   
-  print(paste('debug: ',urlFromParts, sep= ''))
+  #print(paste('debug: ',urlFromParts, sep= ''))
   
   result <- GET(urlFromParts)
   stop_for_status(result)
@@ -109,6 +109,7 @@ geocodeAddress <- function(my_mapIdtoAddress, get_new = TRUE){
   
   print('addresses to geolocate using webservice: ')
   print(nrow(newUniqueAddress))
+  
   #initialize 
   geocodedAddress <- existingGeocodedAddress
   if(get_new == TRUE) {
