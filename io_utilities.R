@@ -6,7 +6,7 @@ con <- dbConnect(odbc::odbc(), parameters$db_connection, timeout = 10)
 #read an individual excel file
 readRawData <- function(filename) {
     readxl::read_excel(filename
-                      ,range = "R1C1:R12000C39"
+                      ,range = "R1C1:R15000C39"
                       ,sheet = 1
                       ,col_names = TRUE
                       ,trim_ws = TRUE
@@ -59,18 +59,18 @@ readRawDataFolder <- function(path) {
 
 #replace records by manual fixes if matched on ids
 #set duplicate_id and reason to NA for new records
-blendData <- function(raw_data, manual_fixes){
+blendData <- function(dt, manual_fixes){
 
   manual_id_exist <- as.data.table(copy(manual_fixes[, id]))
   manual_id_exist[, id_exists := 1]
   manual_id_exist <- manual_id_exist[,.(id = V1, id_exists)]
-  new_records <- base::merge(raw_data, manual_id_exist,   all.x = TRUE )
+  new_records <- base::merge(dt, manual_id_exist,   all.x = TRUE )
   new_records <- new_records[is.na(id_exists),]  
   new_records[, id_exists := NULL]
   
   table(rbindlist(list(new_records, manual_fixes), use.names =  TRUE, idcol = FALSE, fill=TRUE)$reason, useNA = 'ifany')
   rbindlist(list(new_records, manual_fixes), use.names =  TRUE, idcol = FALSE, fill=TRUE)
-  #small diff : raw_data  = 62004 records, manual_fixes = 43335 records, new_records = 18671 records
+  #small diff : dt  = 62004 records, manual_fixes = 43335 records, new_records = 18671 records
   #checksum 43335 + 18671 = 62006 records. 2 records diff
 }
 
@@ -124,6 +124,9 @@ cleanRawData <- function(dt, check_dt= NULL){
     print('has_language_warning count') 
     print(table(dt$has_language_warning , useNA = 'ifany' ))
     
+    print('is_complete count') 
+    print(table(dt$is_complete , useNA = 'ifany' ))
+    
   #1) Modification to data to increase quality  
     
   #alter data to cleanse for future processing
@@ -131,7 +134,11 @@ cleanRawData <- function(dt, check_dt= NULL){
   
   #remove records with no id
   cleanData <- cleanData[!is.na(id),]
+
+  #remove incomplete registrations
+  cleanData <- cleanData[is_complete == 1,]
   
+    
   #remove address 2 if it is redundant
   cleanData <- cleanData[(coll(address2) == coll(street_nb)) | (coll(address2) == coll(zip)) , address2:= NA]
   #leaving BE as this is what google geoloc expects

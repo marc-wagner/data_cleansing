@@ -2,7 +2,17 @@
 
 #pre process data for deduplication
 prepareDedup <- function(dt){
-  dt_out <- copy(dt[, .(id, guid, firstname, lastname, address, dob, duplicate_id, locality, email, phone)])
+  dt_out <- copy(dt[, .(id, firstname, lastname, address, dob, duplicate_id, locality, email, phone, reason)])
+  
+  #increase the id of records flagged as 'K'eep by parameters$shift_records_to_keep_by 
+  #so that they override all other records registered on the website (range 1 to 110000), 
+  #but don't override the records from initial plaintiffs (range parameters$original_plaintiffs_offset)'
+  ids_keep <- dt_out[reason == 'K', id]
+  dt_out[, duplicate_id := as.integer(duplicate_id)]
+  dt_out[duplicate_id %in% ids_keep, duplicate_id := duplicate_id + parameters$shift_records_to_keep_by]
+  dt_out[id           %in% ids_keep, id           := id + parameters$shift_records_to_keep_by]
+  dt_out[, reason:= NULL]  
+  
   dt_out[is.na(duplicate_id), duplicate_id := id]
   dt_out[, dobYear := year(dob)] 
   dt_out[, dobMonth := month(dob)] 
@@ -11,6 +21,7 @@ prepareDedup <- function(dt){
   dt_out[, lastname := as.factor(lastname)]
   dt_out[, email := as.factor(email)]
   dt_out[, phone := as.factor(phone)]
+  
   dt_out <- as.data.frame(dt_out)
   dt_out
 }
@@ -18,7 +29,7 @@ prepareDedup <- function(dt){
 #generate pairs using pre-identified pairs for training
 dedupEpiWeights <-function(dt, identity){
   pairs <- compare.dedup(dt
-                          ,blockfld = list(3,4, 11)  #firstname, dobYear 
+                          ,blockfld = list(3,4, 11)  #firstname, lastname, dobYear 
                           ,phonetic = c(3,4, 5, 8, 9)  #firstname, lastname, address, locality, email
                           ,exclude = c(1,2,6,7)  # id, guid, dob (replaced by components)
                           ,identity = identity
@@ -31,19 +42,19 @@ dedupEpiWeights <-function(dt, identity){
   threshold <- optimalThreshold(calibrateDuplicates$train)
   
   summary(epiClassify(calibrateDuplicates$valid,threshold))
-  # very high threshold of  0.9631064
-  # resulting in too few matches:  2100 vs 2454 pre-identified
+  # threshold of  0.5323504
+  # resulting in 4656 matches:  OK vs 2454 pre-identified
   # true status        N        P        L
-  # FALSE       21122513        0     1637
-  # TRUE             756        0      485
-  
-  # table(dt$reason)
-  # BV    C    D    E    M 
-  # 20  228 2454    5  344 
+  # FALSE       21166709        0     3112
+  # TRUE             176        0     4480
   
   # classify with single threshold
   result <- epiClassify(pairs, threshold.upper = threshold, threshold.lower = threshold)
   summary(result)
+  # classification
+  # true status        N        P        L
+  # FALSE       42333484        0     6159
+  # TRUE             345        0     8967
   pairs
 }
 
@@ -59,6 +70,26 @@ exportPairsToCsv <- function(pairs){
   duplicatesRanked <-  as.data.table(getPairs(pairs, max.weight=(threshold -0.3), min.weight = (threshold -0.6) , single.rows=FALSE))[,-1]
   writeCsvIntoDirectory(duplicatesRanked, 'duplicates_visualCheck_part3_unlikely', parameters$path_forupload)
 }
+
+#ad hoc shift id s to correct range
+adHoc_shift_id <- function(){
+  
+  #1) shift original from 100K to 200K range
+  PairsAutoDedupShiftK[id.1 > 100000L, id.1 := id.1 + 100000L]
+  PairsAutoDedupShiftK[id.2 > 100000L, id.2 := id.2  + 100000L]
+  PairsAutoDedupShiftK[duplicate_id.1 > 100000L, duplicate_id.1 := duplicate_id.1 + 100000L]
+  PairsAutoDedupShiftK[duplicate_id.2 > 100000L, duplicate_id.2 := duplicate_id.2 + 100000L]
+  PairsAutoDedupShiftK[id.2 > 100000L,]
+  
+  #2) shift Keep from 0 to 120K range
+  PairsAutoDedupShiftK[id.1 %in% listOfKs, id.1 := id.1 + parameters$shift_records_to_keep_by]
+  PairsAutoDedupShiftK[id.2 %in% listOfKs, id.2 := id.2 + parameters$shift_records_to_keep_by]
+  PairsAutoDedupShiftK[duplicate_id.1 %in% listOfKs, duplicate_id.1 := duplicate_id.1 + parameters$shift_records_to_keep_by]
+  PairsAutoDedupShiftK[duplicate_id.2 %in% listOfKs, duplicate_id.2 := duplicate_id.2 + parameters$shift_records_to_keep_by]
+  PairsAutoDedupShiftK[id.2 > 100000L & id.2 < 200000L,]
+}
+
+
 
 #for each pair candidate, keep record with greatest ID, flag other as D with id_dup
 buildClusters <- function(pairs){  
@@ -77,6 +108,7 @@ buildClusters <- function(pairs){
      pairsPreviouslyMatched[, .(duplicate_id = duplicate_id.1, member= id.1, initial_duplicate_id = duplicate_id.1, Weight)]
     ,pairsPreviouslyMatched[, .(duplicate_id = duplicate_id.1, member= id.2, initial_duplicate_id = duplicate_id.1, Weight)]
   ))[order(duplicate_id),]
+  
   #build collection of ids (if A linked to B and A linked to C, need to have group of A, B, C before deciding which record is the best)
   for(i in 1:nrow(pairsToBeMatched)){  
     
@@ -141,34 +173,48 @@ deduplicate <- function(dt) {
   # create record pairs and calculate epilink weights
   rpairs <- dedupEpiWeights(dedupData, identity.dedupData)
   
-  #after inspection, it appears that a more accurate cutoff is 0,5304313
-
-  threshold <- 0.5304313
+  
+  #after inspection, the threshold calculated by Batch002 looks OK
+  calibrateDuplicates <- splitData(dataset=rpairs, prop=0.5, keep.mprop=TRUE)
+  threshold <- optimalThreshold(calibrateDuplicates$train)
+  threshold
+  #0.5323504
 
   #validation set classification result
   
   summary(epiClassify(calibrateDuplicates$valid,threshold))
-    # true status        N        P        L
-  # FALSE 21118729        0     5421
-  # TRUE        39        0     1202
+  # true status        N        P        L
+  # FALSE       21166709        0     3112
+  # TRUE             176        0     4480
 
   #full data set classification result
   summary(epiClassify(rpairs,threshold))
-  # classification
   # true status        N        P        L
-  # FALSE       45110863        0    11831
-  # TRUE               0        0        4
+  # FALSE       42333484        0     6159
+  # TRUE             345        0     8967
     
 
   clusters <- buildClusters(rpairs)
   clusters[, id:=member]
   clusters[, member:=NULL]
+  
   clusters[, cluster_id:=duplicate_id]
   clusters[duplicate_id == id, duplicate_id:= NA]
-  clusters[, duplicate_id = as.character(duplicate_id)]
+
+  
+  #reset Keep ids (in parameters$shift_records_to_keep_by to parameters$original_plaintiffs_offset range) back to their original id
+  clusters[id           >= parameters$shift_records_to_keep_by & id           < parameters$original_plaintiffs_offset, id          :=id           - parameters$shift_records_to_keep_by]
+  clusters[duplicate_id >= parameters$shift_records_to_keep_by & duplicate_id < parameters$original_plaintiffs_offset, duplicate_id:=duplicate_id - parameters$shift_records_to_keep_by]
+  clusters[cluster_id   >= parameters$shift_records_to_keep_by & cluster_id   < parameters$original_plaintiffs_offset, cluster_id  :=cluster_id   - parameters$shift_records_to_keep_by]
+  clusters[initial_duplicate_id >= parameters$shift_records_to_keep_by & initial_duplicate_id   < parameters$original_plaintiffs_offset, initial_duplicate_id  :=initial_duplicate_id   - parameters$shift_records_to_keep_by]
+  
+  clusters[, duplicate_id := as.character(duplicate_id)]
+  
   writeFstIntoDirectory(clusters, 'clusters_id_duplicateId', parameters$path_dataQualityCheck)
   writeCsvIntoDirectory(clusters, 'clusters_id_duplicateId', parameters$path_dataQualityCheck)
   
+  clusters[, initial_duplicate_id := NULL]
+  clusters <- unique(clusters[, .( duplicate_id, cluster_id, Weight = min(Weight)), by = id])  #deduplicate with minimum weight in chain
   #clusters <- readFstFromDirectory('clusters_id_duplicateId', parameters$path_dataQualityCheck)
   base::merge(dt, clusters, all.x = TRUE)
   
