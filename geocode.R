@@ -163,6 +163,26 @@ geocodeAddress <- function(my_mapIdtoAddress, get_new = TRUE){
   validated_data
   }  
 
+#high level geocoding entry point, procedure refactored from main
+cleanupAddresses <- function(cleanData){
+  #validate addresses and store in a separate permanent store
+  mapIdtoAddress <- buildGoogleApiGeocodeJsonUrlEncode(cleanData)
+  writeCsvIntoDirectory(mapIdtoAddress, 'mapIdtoAddress', parameters$path_geocoded_address)
+  mapIdtoAddressValidated <- geocodeAddress(mapIdtoAddress , get_new = parameters$get_new_geocoding)
+  
+  #no need to geolocate the id's above 100000, which are the plaintiffs already added to trial.
+  missing_geoloc <- base::merge(cleanData[id < 100000,], mapIdtoAddressValidated, all.x = TRUE)[is.na(address_validated) & reason != 'U'  & reason != 'D',]
+  writeCsvIntoDirectory(missing_geoloc, 'missing_geoloc', parameters$path_dataQualityCheck)
+  
+  geocodedData <- base::merge(cleanData, mapIdtoAddressValidated, all.x = TRUE)
+  #build validated address from components for reason = 'U'se existing
+  geocodedData[reason == 'U' & is.na(address_validated) , address_validated := paste(address,street_nb, ifelse(is.na(address2), '', address2 ), ',' ,zip, locality, country)  ]
+  writeCsvIntoDirectory(geocodedData, 'geocoded_data', parameters$path_forupload)
+  #writeFstIntoDirectory(geocodedData, 'geocoded_data', parameters$path_forupload)
+  geocodedData
+}
+
+
 
 #ad hoc task start
 #run from within "geocodeAddress" context

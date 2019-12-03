@@ -233,8 +233,13 @@ deduplicate <- function(dt) {
   clusters[, initial_duplicate_id := NULL]
   clusters <- unique(clusters[, .( duplicate_id, cluster_id, Weight = min(Weight)), by = id])  #deduplicate with minimum weight in chain
   #clusters <- readFstFromDirectory('clusters_id_duplicateId', parameters$path_dataQualityCheck)
-  base::merge(dt, clusters, all.x = TRUE)
+  dedup_result <- base::merge(dt, clusters, all.x = TRUE)
   
+  dedup_result[, duplicate_id.x:=NULL]
+  dedup_result[, duplicate_id := duplicate_id.y]
+  dedup_result[, duplicate_id.y:=NULL]
+  dedup_result[!is.na(duplicate_id) , auto_reason := 'D']
+  dedup_result
   #TO DO check for clustersCollection[duplicate_id == 61566, member]
   #then add auto_duplicate_id and D in auto_reason for matched members except if equal to 
   
