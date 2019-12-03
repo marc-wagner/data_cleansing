@@ -3,10 +3,34 @@
 #DB connection
 con <- dbConnect(odbc::odbc(), parameters$db_connection, timeout = 10)
 
+read_raw_feather <-
+  function(table_name,
+           columns = NULL,
+           setnames = NULL,
+           to_lower = TRUE) {
+    data <-
+      read_feather(path = file.path("../Batch001/Data/", paste0(table_name, ".feather")), columns = columns) %>% as.data.table()
+    
+    if (to_lower) {
+      setnames(x = data,
+               old = colnames(data),
+               new = str_to_lower(colnames(data)))
+    }
+    
+    if (typeof(setnames) == "character") {
+      setnames(x = data,
+               old = colnames(data),
+               new = str_to_lower(setnames))
+    }
+    
+    data
+  }
+
 #read an individual excel file
 readRawData <- function(filename) {
+  
     readxl::read_excel(filename
-                      ,range = "R1C1:R15000C39"
+                      ,range = "R1C1:R60000C39"
                       ,sheet = 1
                       ,col_names = TRUE
                       ,trim_ws = TRUE
@@ -131,13 +155,20 @@ cleanRawData <- function(dt, check_dt= NULL){
     
   #alter data to cleanse for future processing
   cleanData <- copy(dt) 
-  
+
   #remove records with no id
   cleanData <- cleanData[!is.na(id),]
-
+  
+  #remove records with Error
+  cleanData <- cleanData[reason != 'E' | is.na(reason),]
+  
+  #remove duplicate flag from records incorrectly tagged as duplicates of incomplete records
+  incompleteIds <- dt[is_complete != 1 , id]
+  cleanData[duplicate_id %in% incompleteIds & reason == 'D',  reason := NA      ]
+  cleanData[duplicate_id %in% incompleteIds                ,  duplicate_id := NA]
+  
   #remove incomplete registrations
   cleanData <- cleanData[is_complete == 1,]
-  
     
   #remove address 2 if it is redundant
   cleanData <- cleanData[(coll(address2) == coll(street_nb)) | (coll(address2) == coll(zip)) , address2:= NA]
@@ -176,7 +207,7 @@ cleanRawData <- function(dt, check_dt= NULL){
   cleanData[, zipbuffer := NULL]
   
   #cleanse country: if zip code is not 4 digits numeric, flag it for review because country needs fixing
-  cleanData[!is.numeric(zip) & !is.na(zip) & (as.numeric(zip) < 1000 | as.numeric(zip) > 9999)  , reason:='E']
+  cleanData[!is.numeric(zip) & !is.na(zip) & (as.numeric(zip) < 1000 | as.numeric(zip) > 9999)  , reason:='M']
   
   #cleanse country: mostly due to excel import, 
   #so setting Belgium as default since we filtered on zip code above.
@@ -237,4 +268,25 @@ readFstFromDirectory <- function(filename, directory){
              ,
            )  %>%
     as.data.table()
+}
+
+adhoc_cleaning <- function(){
+  #add dob and newsletter to original plaintiffs
+  original_plaintiffs_dob <- read.csv2( paste(paste( paste ( '..',  'Batch002', sep='/') , parameters$path_input_data, sep='/'),'manual_enrichment/original_plaintiffs_dob_enrich.csv', sep='/'), stringsAsFactors = FALSE) %>% 
+    as.data.table()
+  original_plaintiffs_dob <-  original_plaintiffs_dob[,.(firstname, lastname, orig_dob = dob, orig_newsletter = newsletter, orig_is_public = is_public)]
+  original_plaintiffs_dob[                 , fixed_dob := parse_date_time(orig_dob, c("%d-%m-%y", "%d/%m/%y" , "%d-%m-%Y" , "%d/%m/%Y", "%d%m%Y", "%Y") )]
+  original_plaintiffs_dob[is.na(fixed_dob) & as.integer(orig_dob) > 1000000 , fixed_dob := parse_date_time(paste('0',orig_dob, sep = ''), orders = "dmY")]
+  original_plaintiffs_dob[is.na(fixed_dob) & as.integer(orig_dob) > 10000   , fixed_dob := parse_date_time(paste('0',orig_dob, sep = ''), orders = "dmy")]
+  original_plaintiffs_dob[is.na(fixed_dob) & as.numeric(orig_dob) < 2015 & as.numeric(orig_dob) > 1915, fixed_dob := ISOdate( as.numeric(orig_dob), 7, 1)]
+  original_plaintiffs_dob[fixed_dob > '2015-01-01' , fixed_dob := ISOdate(lubridate::year(fixed_dob) - 100 , lubridate::month(fixed_dob), lubridate::day(fixed_dob)) ]
+  
+  original_plaintiffs_dob[casefold(substr(orig_newsletter, 1, 1))=="n", orig_newsletter := 0 ]
+  original_plaintiffs_dob[casefold(substr(orig_newsletter, 1, 1))!= 0, orig_newsletter  := 1 ]
+  
+  original_plaintiffs_dob[casefold(substr(orig_is_public, 1, 1))=="n", orig_is_public := 0 ]
+  original_plaintiffs_dob[casefold(substr(orig_is_public, 1, 1))!= 0, orig_is_public  := 1 ]
+  
+  write.csv2(original_plaintiffs_dob, paste(paste( paste ( '..',  'Batch002', sep='/') , parameters$path_input_data, sep='/'),'manual_enrichment/original_plaintiffs_dob_cleansed.csv', sep='/'))
+  
 }

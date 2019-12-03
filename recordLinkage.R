@@ -16,7 +16,8 @@ prepareDedup <- function(dt){
   dt_out[is.na(duplicate_id), duplicate_id := id]
   dt_out[, dobYear := year(dob)] 
   dt_out[, dobMonth := month(dob)] 
-  dt_out[, dobDay := mday(dob)] 
+  dt_out[, dobDay := mday(dob)]
+  dt_out[, dob := NULL]
   dt_out[, firstname := as.factor(firstname)]
   dt_out[, lastname := as.factor(lastname)]
   dt_out[, email := as.factor(email)]
@@ -28,10 +29,23 @@ prepareDedup <- function(dt){
 
 #generate pairs using pre-identified pairs for training
 dedupEpiWeights <-function(dt, identity){
+  
+  #dereference in a dumb way to avoid any trip up during assignment
+  firstname_idx <- which(colnames(dt)=="firstname")
+  lastname_idx <- which(colnames(dt)=="lastname")
+  dobYear_idx <- which(colnames(dt)=="dobYear")
+  
+  address_idx <- which(colnames(dt)=="address")
+  locality_idx <- which(colnames(dt)=="locality")
+  email_idx <- which(colnames(dt)=="email")
+  
+  id_idx <- which(colnames(dt)=="id")
+  duplicate_id_idx <- which(colnames(dt)=="duplicate_id")
+  
   pairs <- compare.dedup(dt
-                          ,blockfld = list(3,4, 11)  #firstname, lastname, dobYear 
-                          ,phonetic = c(3,4, 5, 8, 9)  #firstname, lastname, address, locality, email
-                          ,exclude = c(1,2,6,7)  # id, guid, dob (replaced by components)
+                          ,blockfld = list(firstname_idx ,lastname_idx, dobYear_idx)  #firstname, lastname, dobYear 
+                          ,phonetic = c(firstname_idx ,lastname_idx, address_idx , locality_idx , email_idx)  #firstname, lastname, address, locality, email
+                          ,exclude = c(id_idx,duplicate_id_idx)  # id , duplicate_id
                           ,identity = identity
                           )
   
@@ -42,7 +56,7 @@ dedupEpiWeights <-function(dt, identity){
   threshold <- optimalThreshold(calibrateDuplicates$train)
   
   summary(epiClassify(calibrateDuplicates$valid,threshold))
-  # threshold of  0.5323504
+  # threshold of  0.5355089
   # resulting in 4656 matches:  OK vs 2454 pre-identified
   # true status        N        P        L
   # FALSE       21166709        0     3112
@@ -92,7 +106,7 @@ adHoc_shift_id <- function(){
 
 
 #for each pair candidate, keep record with greatest ID, flag other as D with id_dup
-buildClusters <- function(pairs){  
+buildClusters <- function(pairs, threshold){  
   
   PairsAutoDedup <- as.data.table(getPairs(pairs, min.weight=threshold, single.rows=TRUE))
   PairsAutoDedup <- PairsAutoDedup[, .(id.1, id.2, duplicate_id.1 = as.integer(duplicate_id.1), duplicate_id.2 = as.integer(duplicate_id.2), Weight) ]
@@ -174,27 +188,30 @@ deduplicate <- function(dt) {
   rpairs <- dedupEpiWeights(dedupData, identity.dedupData)
   
   
-  #after inspection, the threshold calculated by Batch002 looks OK
-  calibrateDuplicates <- splitData(dataset=rpairs, prop=0.5, keep.mprop=TRUE)
-  threshold <- optimalThreshold(calibrateDuplicates$train)
-  threshold
-  #0.5323504
+  #after inspection, the threshold calculated by Batch004 is now too low. we will hardcode
+  #calibrateDuplicates <- splitData(dataset=rpairs, prop=0.5, keep.mprop=TRUE)
+  #threshold <- optimalThreshold(calibrateDuplicates$train)
+  
+  print('threshold hardcoded: ')
+  threshold <- 0.5355089
+  #0.5355089
+  print(threshold)
 
   #validation set classification result
   
-  summary(epiClassify(calibrateDuplicates$valid,threshold))
+  #summary(epiClassify(calibrateDuplicates$valid,threshold))
   # true status        N        P        L
-  # FALSE       21166709        0     3112
-  # TRUE             176        0     4480
+  # FALSE       15494975        0      197
+  # TRUE              69        0     1874
 
   #full data set classification result
   summary(epiClassify(rpairs,threshold))
   # true status        N        P        L
-  # FALSE       42333484        0     6159
-  # TRUE             345        0     8967
+  # FALSE       30989935        0      407
+  # TRUE             154        0     3733
     
 
-  clusters <- buildClusters(rpairs)
+  clusters <- buildClusters(rpairs, threshold =  threshold)
   clusters[, id:=member]
   clusters[, member:=NULL]
   
