@@ -27,11 +27,17 @@ writeCsvIntoDirectory(cleanData, 'concatenated_raw_data', parameters$path_dataQu
 
 #classify errors
 #TO DO
+
 geocodedData <- cleanupAddresses(cleanData)
 
 #free up memory before deduplication
-rm(raw_data, mapIdtoAddress, mapIdtoAddressValidated, check_data, cleanData, fixed_data, missing_geoloc)
+rm( check_data, cleanData)
 dedupData <- deduplicate(geocodedData)
+
+#add fields for trial_submission: flag original coplaintiffs, all others are second wave.
+dedupData[(id >= 200000 & id < 250000 ), trial_submission_date := date('2015-01-01')]
+dedupData[(id <  200000 & is.na(trial_submission_date)), trial_submission_date := date('2019-06-15')]
+table(dedupData$trial_submission_date, useNA = 'ifany')
 
 storeDedupedCoPlaintiffs(dedupData)
 

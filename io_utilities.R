@@ -27,10 +27,10 @@ read_raw_feather <-
   }
 
 #read an individual excel file
-readRawData <- function(filename) {
-  
+readRawData <- function(filename, nrCols) {
+    myRange <- paste('R1C1:R60000C', nrCols, sep='')
     readxl::read_excel(filename
-                      ,range = "R1C1:R60000C39"
+                      ,range = myRange
                       ,sheet = 1
                       ,col_names = TRUE
                       ,trim_ws = TRUE
@@ -40,13 +40,15 @@ readRawData <- function(filename) {
 }
 
 #traverse folder with manually curated excel files
-readRawDataFolder <- function(path) {
-  
+readRawDataFolder <- function(path, type = 'codemandeur') {
+  if (type == 'donateur') 
+    {nrCols <- 41}
+  else {nrCols <- 39 }
   files_in_folder <- list.files(path = path
                                 ,full.names = TRUE
                                 ,pattern = ".xlsx$")
   for (file in files_in_folder) {
-    try(databuffer <- readRawData(filename = file)) 
+    try(databuffer <- readRawData(filename = file, nrCols)) 
     data <- if(!is.null(nrow(data))  ) {
         rbindlist(list(copy(databuffer), data), fill = FALSE, idcol = NULL)
     } else databuffer
