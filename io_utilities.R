@@ -153,7 +153,7 @@ cleanRawData <- function(dt, check_dt= NULL){
     print('is_complete count') 
     print(table(dt$is_complete , useNA = 'ifany' ))
     
-  #1) Modification to data to increase quality  
+  #2) Modification to data to increase quality  
     
   #alter data to cleanse for future processing
   cleanData <- copy(dt) 
@@ -223,6 +223,8 @@ cleanRawData <- function(dt, check_dt= NULL){
   
   #remove semicolon in extra_info , it messes with the csv export
   cleanData[extra_info == 'N;', extra_info := 'N']
+  
+  #TO DO : remove flag 'underage' if profession is not like 'kind van...' or 'enfant de...'
   
   #eyeball data to setup some other rules
   cleanData
