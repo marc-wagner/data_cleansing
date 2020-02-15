@@ -138,8 +138,6 @@ link_donateurs[12006,]
 link_coplaintiffs[49338,]
 #ok
 
-View(RecordLinkage::getPairs(rpairs_email, single.rows=TRUE))
-
 #enrich donateurs with info from coplaintiff using linked records
 enriched_donateurs <- donateurs[,.( id.1 = id, page, donation_amount, donation_date)]
 enriched_donateurs <-  base::merge(  enriched_donateurs
@@ -148,4 +146,10 @@ enriched_donateurs <-  base::merge(  enriched_donateurs
                                                                                                 , language= language.2
                                                                                                 , zip = zip.2)]
                                    ,   all.x = TRUE )
+
+# create record pairs and calculate epilink weights
+rpairs_name <- linkEpiWeights(link_donateurs, link_coplaintiffs, 'name')
+
+#then merge this in too, only for donateurs not previously enriched
+
 #end
