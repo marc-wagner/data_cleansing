@@ -32,13 +32,24 @@ linkEpiWeights <-function(dt1, dt2, blockfld){
    language_idx <- which(colnames(dt1)=="language")
    dob_idx <- which(colnames(dt1)=="dob")
    
-   pairs <- compare.linkage(dt1
+   if(blockfld == 'none')
+      {
+      
+      pairs_1 <- compare.linkage(dt1
+                               ,dt2[1:10000,]
+                               ,phonetic = c(first_last_name_idx, street_and_nr_idx, locality_idx, email_idx)  #firstname, lastname, address, locality, email
+                               ,exclude = c(id_idx,duplicate_id_idx, language_idx, dob_idx)  # id , duplicate_id, language, dob
+                              )        
+   }
+   else
+   {
+      pairs <- compare.linkage(dt1
                           ,dt2
-                          ,blockfld = list( ifelse(blockfld =='email', email_idx, first_last_name_idx))
+                          ,blockfld = list(  ifelse(blockfld =='email', email_idx, first_last_name_idx))
                           ,phonetic = c(first_last_name_idx, street_and_nr_idx, locality_idx, email_idx)  #firstname, lastname, address, locality, email
                           ,exclude = c(id_idx,duplicate_id_idx, language_idx, dob_idx)  # id , duplicate_id, language, dob
    )
-   
+   }
    pairs <- epiWeights(pairs)
    
    # classify with single threshold
@@ -112,15 +123,9 @@ cleancoplaintiffs  <- coplaintiffs_clean[,.(id, first_last_name=tolower(first_la
 #free up memory
 #rm(donateurs, fixed_data, geocodedData, dedupData)
 
-#try 1: use dedup functionality, group both datasets into 1
-#donateurs_coplaintiffs_union <- rbindlist(list(cleandonateurs, cleancoplaintiffs), use.names = TRUE, idcol = FALSE, fill = TRUE)
-#dedupData <- prepareLinkage(donateurs_coplaintiffs_union)
-#not applicable identity.dedupData <- as.vector(dedupData$duplicate_id)
-
 #try 2: use recordlinkage instead of dedup, submit 2 separate datasets
 link_donateurs <- prepareLinkage(cleandonateurs)
 link_coplaintiffs <- prepareLinkage(cleancoplaintiffs)
-#next step: modify linkEpiWeights to use  compare.linkage() instead of compare.dedup()
 
 # create record pairs and calculate epilink weights
 rpairs_email <- linkEpiWeights(link_donateurs, link_coplaintiffs, 'email')
@@ -139,7 +144,7 @@ link_coplaintiffs[49338,]
 #ok
 
 #enrich donateurs with info from coplaintiff using linked records
-enriched_donateurs <- donateurs[,.( id.1 = id, page, donation_amount, donation_date)]
+enriched_donateurs <- donateurs[,.( id.1 = id, page, zip1 = zip, donation_amount, donation_date)]
 enriched_donateurs <-  base::merge(  enriched_donateurs
                                    , data.table(RecordLinkage::getPairs(rpairs_email, single.rows=TRUE))[,.(id.1
                                                                                                 , dob = dob.2
@@ -147,9 +152,44 @@ enriched_donateurs <-  base::merge(  enriched_donateurs
                                                                                                 , zip = zip.2)]
                                    ,   all.x = TRUE )
 
-# create record pairs and calculate epilink weights
+# create record pairs and calculate epilink weights with name as blocking factor
 rpairs_name <- linkEpiWeights(link_donateurs, link_coplaintiffs, 'name')
+#then merge this in too and blend to complete the data
+enriched_donateurs <-  base::merge(  enriched_donateurs
+                                     , data.table(RecordLinkage::getPairs(rpairs_name, single.rows=TRUE))[,.(id.1
+                                                                                                              , dob.2
+                                                                                                              , language.2
+                                                                                                              , zip.2)]
+                                     ,   all.x = TRUE )
 
-#then merge this in too, only for donateurs not previously enriched
+#match remaining using no blocking criterion
+#as this is a very memory intensive task ( 2^n ), we need to narrow down link_donateurs to unmatched id's only
+link_donateurs_noblock <- data.table(base::merge(link_donateurs
+                                      , unique(data.table(RecordLinkage::getPairs(rpairs_email, single.rows=TRUE))[,.(id=id.1 , found_email = 1)])
+                                      , all.x = TRUE ))
+link_donateurs_noblock <- data.table(base::merge(link_donateurs_noblock
+                                      , unique(data.table(RecordLinkage::getPairs(rpairs_name, single.rows=TRUE))[,.(id=id.1 , found_name = 1)])
+                                      , all.x = TRUE ))
+link_donateurs_noblock <- link_donateurs_noblock[is.na(link_donateurs_noblock$found_email) & is.na(link_donateurs_noblock$found_name),]
+link_donateurs_noblock[, found_email:=NULL]
+link_donateurs_noblock[, found_name :=NULL]
+
+#free up memory
+rm(coplaintiffs_clean, dedupData, fixed_data, geocodedData, cleancoplaintiffs)
+
+rpairs_noblock   <- linkEpiWeights(link_donateurs_noblock[1:1000,], link_coplaintiffs[1:15000,]    , 'none')
+rpairs_noblock_2 <- linkEpiWeights(link_donateurs_noblock, link_coplaintiffs[25001:57744,], 'none')
+
+
+profiling_data <- enriched_donateurs[,.(  id             = id.1
+                                             ,payment_method = page
+                                             ,donation_amount
+                                             ,donation_date   = as.Date('1900-01-01')+ as.integer(donation_date) - 2
+                                             ,dob      = as.Date(ifelse(is.na(dob), dob.2, dob), origin = '1970-01-01')
+                                             ,language        = ifelse(is.na(language), language.2, language)
+                                             ,postal_code             = ifelse(is.na(zip), ifelse(is.na(zip.2), as.character(zip1), as.character(zip.2)) , as.character(zip)) 
+                                             )]
+
+#and proceed to profiling.R with donateur data
 
 #end

@@ -32,7 +32,7 @@ profiling_data[ is.na(language) , language :='not specified']
 profiling_data[ postal_code < 1500 , region :='Brussels Capital Region']    
 profiling_data[ postal_code < 4000 & is.na(region) , region :='Flanders'] 
 profiling_data[ postal_code < 8000 & is.na(region) , region :='Wallonia'] 
-profiling_data[ is.na(region) , region :='Flanders'] 
+profiling_data[ postal_code>= 8000 & is.na(region) , region :='Flanders'] 
 table(profiling_data[, region], useNA = 'ifany')
 
 #province
@@ -48,7 +48,7 @@ profiling_data[ postal_code < 6600 & is.na(province) , province :='Hainaut']
 profiling_data[ postal_code < 7000 & is.na(province) , province :='Luxembourg'] 
 profiling_data[ postal_code < 8000 & is.na(province) , province :='Hainaut'] 
 profiling_data[ postal_code < 9000 & is.na(province) , province :='West Flanders'] 
-profiling_data[ is.na(province) , province :='East Flanders'] 
+profiling_data[ postal_code >=9000 & is.na(province) , province :='East Flanders'] 
 table(profiling_data[, province], useNA = 'ifany')
 
 #combined table with 3 criteria: age, language, region:
