@@ -1,4 +1,8 @@
 #Profiling Donateurs
+
+#4 files: GocardLess, Triodos, PayPal and Mollie 
+#Mollie and Paypal are far from optimal: can get better data through the API 
+
 source('dependencies.R')
 source('io_utilities.R')
 source('geocode.R')
@@ -35,8 +39,9 @@ linkEpiWeights <-function(dt1, dt2, blockfld){
    if(blockfld == 'none')
       {
       
-      pairs_1 <- compare.linkage(dt1
-                               ,dt2[1:10000,]
+      pairs <- compare.linkage(dt1
+                               ,dt2
+                              # ,blockfld is left empty
                                ,phonetic = c(first_last_name_idx, street_and_nr_idx, locality_idx, email_idx)  #firstname, lastname, address, locality, email
                                ,exclude = c(id_idx,duplicate_id_idx, language_idx, dob_idx)  # id , duplicate_id, language, dob
                               )        
@@ -45,15 +50,15 @@ linkEpiWeights <-function(dt1, dt2, blockfld){
    {
       pairs <- compare.linkage(dt1
                           ,dt2
-                          ,blockfld = list(  ifelse(blockfld =='email', email_idx, first_last_name_idx))
+                          ,blockfld = list(  ifelse(blockfld =='email', email_idx, first_last_name_idx)) #either e-mail or first_last_name
                           ,phonetic = c(first_last_name_idx, street_and_nr_idx, locality_idx, email_idx)  #firstname, lastname, address, locality, email
                           ,exclude = c(id_idx,duplicate_id_idx, language_idx, dob_idx)  # id , duplicate_id, language, dob
-   )
+                        )
    }
    pairs <- epiWeights(pairs)
    
    # classify with single threshold
-   result <- epiClassify(pairs, threshold.lower =  0.4, threshold.upper = 0.7)
+   result <- epiClassify(pairs, threshold.lower =  0.2, threshold.upper = 0.5)
    summary(result)
    #paste results here
    
@@ -123,7 +128,7 @@ cleancoplaintiffs  <- coplaintiffs_clean[,.(id, first_last_name=tolower(first_la
 #free up memory
 #rm(donateurs, fixed_data, geocodedData, dedupData)
 
-#try 2: use recordlinkage instead of dedup, submit 2 separate datasets
+#use recordlinkage instead of dedup, submit 2 separate datasets
 link_donateurs <- prepareLinkage(cleandonateurs)
 link_coplaintiffs <- prepareLinkage(cleancoplaintiffs)
 
@@ -134,33 +139,56 @@ rpairs_email <- linkEpiWeights(link_donateurs, link_coplaintiffs, 'email')
 #View(rpairs$pairs)
 #spot check 3801	15360
 # and       3321	15360
-link_donateurs[3801,]
-link_donateurs[3321,]
-link_coplaintiffs[15360,]
+#link_donateurs[3801,]
+#link_donateurs[3321,]
+#link_coplaintiffs[15360,]
 #ok
 #spot check 12006	49338
-link_donateurs[12006,]
-link_coplaintiffs[49338,]
+#link_donateurs[12006,]
+#link_coplaintiffs[49338,]
 #ok
 
 #enrich donateurs with info from coplaintiff using linked records
 enriched_donateurs <- donateurs[,.( id.1 = id, page, zip1 = zip, donation_amount, donation_date)]
 enriched_donateurs <-  base::merge(  enriched_donateurs
                                    , data.table(RecordLinkage::getPairs(rpairs_email, single.rows=TRUE))[,.(id.1
-                                                                                                , dob = dob.2
-                                                                                                , language= language.2
-                                                                                                , zip = zip.2)]
+                                                                                                , dob_email = dob.2
+                                                                                                , language_email= language.2
+                                                                                                , zip_email = zip.2
+                                                                                                , match_email = 1)]
                                    ,   all.x = TRUE )
+
+table(enriched_donateurs[,.(page, match_email)],useNA = 'ifany')
+# match_field
+# page      e-mail <NA>
+#    GCL       1896  954
+# mollie     315  178
+# paypal    4346 4626
+# triodos      0   35
 
 # create record pairs and calculate epilink weights with name as blocking factor
 rpairs_name <- linkEpiWeights(link_donateurs, link_coplaintiffs, 'name')
 #then merge this in too and blend to complete the data
 enriched_donateurs <-  base::merge(  enriched_donateurs
                                      , data.table(RecordLinkage::getPairs(rpairs_name, single.rows=TRUE))[,.(id.1
-                                                                                                              , dob.2
-                                                                                                              , language.2
-                                                                                                              , zip.2)]
+                                                                                                              , dob_name = dob.2
+                                                                                                              , language_name = language.2
+                                                                                                              , zip_name = zip.2
+                                                                                                              , match_name = 1)]
                                      ,   all.x = TRUE )
+table(enriched_donateurs[,.(page,  match_name, match_email)],useNA = 'ifany')
+# match_email = 1
+# match_name 1     <NA>
+#    GCL     1836  145
+# mollie     0     315
+# paypal     0    4346
+# triodos    0       0
+# match_email = NA
+# match_name 1     <NA>
+#    GCL      555  434  >> 555 GCL donateurs matched on name not on email
+# mollie     0     178
+# paypal     0    4626
+# triodos    0      35
 
 #match remaining using no blocking criterion
 #as this is a very memory intensive task ( 2^n ), we need to narrow down link_donateurs to unmatched id's only
@@ -177,8 +205,26 @@ link_donateurs_noblock[, found_name :=NULL]
 #free up memory
 rm(coplaintiffs_clean, dedupData, fixed_data, geocodedData, cleancoplaintiffs)
 
-rpairs_noblock   <- linkEpiWeights(link_donateurs_noblock[1:1000,], link_coplaintiffs[1:15000,]    , 'none')
-rpairs_noblock_2 <- linkEpiWeights(link_donateurs_noblock, link_coplaintiffs[25001:57744,], 'none')
+
+#TO DO : increase matching by testing various strategies:
+#                 increase weight of name and email
+#                 break up name in namepart 1 and namepart 2, then store swapped nameparts in new columns for matching
+#                 find a better phonetic algorithm
+#                 adjust threshold for matching according to epiweights in current set
+
+#loop over chunks of umatched donateurs and check against all coplaintiffs,
+#then build a collection of best matches
+matched_noblock_donateurs = NULL
+for (chunk in seq(1:(nrow(link_donateurs_noblock)/400)))
+{
+   chunk_results   <- linkEpiWeights(link_donateurs_noblock[((chunk - 1) * 400 +1): ifelse((400 * chunk)>nrow(link_donateurs_noblock), nrow(link_donateurs_noblock), (400 * chunk)),]
+                                     , link_coplaintiffs
+                                     , 'none')
+   matched_noblock_donateurs <- rbindlist(list(matched_noblock_donateurs, chunk_results), fill = FALSE, idcol = NULL)
+}
+
+#rpairs_noblock   <- linkEpiWeights(link_donateurs_noblock[1:1000,], link_coplaintiffs[1:15000,]    , 'none')
+
 
 
 profiling_data <- enriched_donateurs[,.(  id             = id.1
@@ -192,4 +238,12 @@ profiling_data <- enriched_donateurs[,.(  id             = id.1
 
 #and proceed to profiling.R with donateur data
 
+#give stats based on zip code, extrapolate language when not in Bxl, skip dob.
+
 #end
+
+
+#ad hoc test try giving more weight to name and streetname, nr
+#by duplicating the fields: didnt give substantially better results
+
+""
