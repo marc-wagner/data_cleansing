@@ -7,98 +7,145 @@
 #import libaries
 source('dependencies.R')
 source('profiling.R')
+source('geocode.R')
 
 #function declarations
+
+sample_test_train_set <- function(dt){
+  ## PRE PROCESSING: create Train and Test set
+  try(dt[,data_set := NULL])
+  
+  #positive train set
+  size_positives_train <- round(nrow(dt[target == 1, ])*parameters$train_test_ratio,0)
+  positive_rows <- which(dt$target == 1 )
+  train_positive_rows <- sample(positive_rows, size_positives_train)
+  dt[train_positive_rows, data_set:= "train"]
+  
+  #positive test set
+  dt[is.na(data_set) & target == 1 , data_set:= 'test' ]
+  
+  #negative train set
+  size_negatives_train <- round(nrow(dt[target == 0  , ])* parameters$train_test_ratio ,0)
+  negative_rows <- which(dt$target == 0 )
+  train_negative_rows <- sample(negative_rows, size_negatives_train)
+  dt[train_negative_rows, data_set := 'train' ]
+
+  #negative train set
+  dt[is.na(data_set) & target == 0 , data_set:= 'test' ]
+  
+  dt
+}
+
+convert_to_model_dt <- function(dt) {
+  numeric_columns <- colnames(dt)[vapply(dt, is.numeric, TRUE)]
+  
+  dt %>% 
+    .[, ..numeric_columns] %>% 
+    .[, target := as.factor(target)] %>% 
+    as.data.frame()
+}
+
+train_model <- function(dt){
+  
+  dt_train <- copy(dt[data_set == 'train',])
+  
+  train_task <- mlr::makeClassifTask(id = "classif_donateurs",
+                                     data = convert_to_model_dt(dt_train),
+                                     target = "target",
+                                     positive = "1"  )
+  
+  par.vals = list(
+    eta = 0.005,
+    max_depth = 5,
+    verbose = 0,
+    colsample_bytree = 0.85,
+    subsample = 0.7,
+    alpha = 2,
+    nrounds = 50,
+    eval_metric = list("logloss","auc")
+  )
+  
+  learner <- mlr::makeLearner("classif.xgboost", predict.type = "prob", par.vals = par.vals, verbose=0)
+  
+  cv <- mlr::makeResampleDesc("CV",iters=5)
+  res <- mlr::resample(learner, train_task, cv, measures = list(mmce, auc), show.info = FALSE)
+  model <- mlr::train(learner = learner, task= train_task)
+  
+  imp = generateFeatureImportanceData(train_task, "permutation.importance",
+                                      learner, "region", nmc = 10L, local = TRUE)
+  print(imp)
+  model
+}
+
+predict_values <- function(dt, model){
+  dt_test <- dt[data_set == 'test',]
+  pred_task <- mlr::makeClassifTask(id = "predict_donateurs",
+                                    data = convert_to_model_dt(dt_test),
+                                    target = "target" ,
+                                    positive = "1"  )
+  predict(model, task=pred_task )
+}
+
+assess_predictive_performance <- function(model, predictions, dt){
+  
+  classifierplots(pred.prob = predictions$data[,]$prob.1, test.y = predictions$data[,]$truth)
+  classifierplots::lift_plot(pred.prob = predictions$data[,]$prob.1, test.y = predictions$data[,]$truth, granularity = 0.001)
+  prd_perf <- rbindlist(list(
+    data.table(measure = 'auc', value = performance(predictions, auc) )
+    ,data.table(measure = 'logloss', value = performance(predictions, logloss) )
+  ), fill = FALSE )
+  
+  train_task <- mlr::makeClassifTask(id = "classif_donateurs",
+                                     data = convert_to_model_dt(dt),
+                                     target = "target",
+                                     positive = "1"  )
+  
+  par.vals = list(
+    eta = 0.005,
+    max_depth = 5,
+    verbose = 0,
+    colsample_bytree = 0.85,
+    subsample = 0.7,
+    alpha = 2,
+    nrounds = 50,
+    eval_metric = list("logloss","auc")
+  )
+  
+  learner <- mlr::makeLearner("classif.xgboost", predict.type = "prob", par.vals = par.vals, verbose=0)
+  
+  cv <- mlr::makeResampleDesc("CV",iters=5)
+  res <- mlr::resample(learner, train_task, cv, measures = list(logloss, auc), show.info = FALSE)
+  
+  data.table( train.auc = res$aggr["auc.test.mean"] , test.auc = prd_perf[measure =="auc", value], train.logloss = res$aggr["logloss.test.mean"], test.logloss = prd_perf[measure=="logloss", value] )
+}
+
+
 main_train_classification <- function(dt_full){
-  
-  #set labels
-  dt_full[, target := 9] #flag all as unknowns
-  dt_full[Result %in% positive_filter, target := 1]
-  dt_full[Result %in% negative_filter, target := 0]
-  dt_full[target == 9, unknown:= TRUE] #flag all unknowns persistently to be able to reset them in loop
-  
-  dt_full[, Result := NULL] #remove features that bring signal leakage
-  dt_full[, reason_for_refusal:=NULL]
-  dt_full_dummy <- copy(dt_full)
-  dt_full_dummy[, ind_existing_phone_number:=NULL]
-  dt_full_dummy[, language_code:=NULL]
-  
-  
-  #TO DO : get nace code to work for full set,
-  # currently excluded as it didn't show up in the model anyhow.
-  
-  dt_full_dummy[, unknown:=NULL]
-  dt_full_dummy[, excluded:=NULL]
-  
-  dt_full_dummy <- add_dummy_features(dt_full_dummy, add_nace = FALSE)  #add features to full set, to have a common ground  
-  
-  #loop on various training samples  , mixing in more unknowns as we go 
-  for (negative_percentage in seq(1.0, 0.0, -0.1)) {
-    print(paste("negative ratio: ", negative_percentage))
     
+    browser()
+  
     set.seed(123) #reset seed
-    dt_baseline <- sample_test_train_set(dt_full_dummy , negative_percentage )
+    dt_baseline <- sample_test_train_set(dt_full)
     
     model <- train_model(dt_baseline) #hardcoded xgboost, with specific hyperparameters
     
     if(parameters$debug==1) debugClassificationModel(dt_baseline, model) 
     
     predictions <- predict_values(dt_baseline, model)
+  
+  #  TO DO fix 2 plots below. commented out below because of this error
+  #  "Error in alpha * 255 : argument non numérique pour un opérateur binaire"
+  #  print(assess_predictive_performance(model, predictions, dt_baseline))
+  #  classifierplots::lift_plot(pred.prob = predictions$data[,]$prob.1, test.y = predictions$data[,]$truth, granularity = 0.001)
     
-    print(assess_predictive_performance(model, predictions, dt_baseline))
-    
-  }
-  
-  #best performance is for using all negatives only:
-  set.seed(123) #reset seed
-  dt_baseline <- sample_test_train_set(dt_full_dummy , 1.0 )
-  
-  model <- train_model(dt_baseline) #hardcoded xgboost, with specific hyperparameters
-  
-  saveRDS(model, "model_B2B_prospect.rds")
-  
-  predictions <- predict_values(dt_baseline, model)
-  
-  classifierplots::lift_plot(pred.prob = predictions$data[,]$prob.1, test.y = predictions$data[,]$truth, granularity = 0.001)
-  
-  #now run model on all unknowns
-  dt_pred <- filter_for_prediction(dt_full_dummy)   #filter all that have a result (target 0 or 1) or that were in initial population
-  predictions <- predict_values(dt_pred, model)
-  
-  #create a list of top lift records  (should send 1000 and 3500, but sending more to let Dries cut through some more.)
-  dt_full_pred <- cbind(dt_pred, as.data.table(predictions$data)[,prob.1])
-  dt_full_pred <- merge(dt_full_pred, dt_full[,.(id,initial_pop, excluded)], by="id", all.x = TRUE)
-  setnames(dt_full_pred , "V2", "Prob.positive")
-  
-  dt_full_pred <- dt_full_pred[excluded == FALSE,]
-  pred.F <- head(dt_full_pred[order(-Prob.positive) & language_code_F == 1, id], 750) %>% as.data.table()
-  pred.N <- head(dt_full_pred[order(-Prob.positive) & language_code_N == 1, id], 2625) %>% as.data.table()
-  
-  
+    saveRDS(model, "model_B2B_prospect.rds")
+
   #debug sense check top ranked for Shapley 
-  pred_predictor <- Predictor$new(model = model, data = as.data.frame(dt_pred), y= "target",  type="prob")
+  dt_pred <- copy(dt_baseline[data_set== 'test',])
+  pred_predictor <- iml::Predictor$new(model = model, data = as.data.frame(dt_pred), y= "target",  type="prob")
   pred_shapley_explain <- iml::Shapley$new(pred_predictor, x.interest = as.data.frame(dt_pred)[1,], sample.size = 100)
   View(as.data.table(pred_shapley_explain$results)[order(feature),])
   plot(pred_shapley_explain)
-  
-  #create a list of random records
-  placebo.samples <- dt_full_pred[sample( nrow(dt_full_pred), 2000) , .(id, language_code_N, language_code_F)] #250
-  placebo.F <- head(placebo.samples[language_code_F == 1, id], 250) %>% as.data.table()
-  placebo.N <- head(placebo.samples[language_code_N == 1, id], 875) %>% as.data.table()
-  
-  #store all outputs for future reference
-  pred.F %>%    as.data.frame() %>%write_fst(path = file.path("data", paste0("batch1_20190401.FR.predictions", ".fst")))
-  pred.N %>%    as.data.frame() %>%write_fst(path = file.path("data", paste0("batch1_20190401.NL.predictions", ".fst")))
-  placebo.F %>% as.data.frame() %>% write_fst(path = file.path("data", paste0("batch1_20190401.FR.placebo", ".fst")))
-  placebo.N %>% as.data.frame() %>%write_fst(path = file.path("data", paste0("batch1_20190401.NL.placebo", ".fst")))
-  
-  
-  #produce a mix of test set and predictions 
-  rbindlist(list(placebo.F, pred.F), use.names = TRUE, fill = FALSE, idcol=NULL) %>% as.data.frame() %>% write_fst( path = file.path("data", paste0("batch1_20190401.FR.prospects", ".fst")))
-  rbindlist(list(placebo.N, pred.N), use.names = TRUE, fill = FALSE, idcol=NULL) %>% as.data.frame() %>% write_fst( path = file.path("data", paste0("batch1_20190401.NL.prospects", ".fst")))
-  rbindlist(list(placebo.F, pred.F), use.names = TRUE, fill = FALSE, idcol=NULL) %>% as.data.frame() %>% write_csv2(path = file.path("data", paste0("batch1_20190401.FR.prospects", ".csv")))
-  rbindlist(list(placebo.N, pred.N), use.names = TRUE, fill = FALSE, idcol=NULL) %>% as.data.frame() %>% write_csv2(path = file.path("data", paste0("batch1_20190401.NL.prospects", ".csv")))
-  
   
 }  
 
@@ -106,7 +153,7 @@ main_train_classification <- function(dt_full){
 
 # start of procedure ->
 #test if precomputed enriched coplaintiffs file exists in memory or on disk, else error message
-if(!is.data.table(enriched_coplaintiffs))
+if(!is.data.table(try(enriched_coplaintiffs)))
 {
   if(!is.data.table(try(enriched_coplaintiffs <- readCsvFromDirectory("coplaintiffs_for_model","data"))))
   {
@@ -118,7 +165,7 @@ if(!is.data.table(enriched_coplaintiffs))
 # A) build labels
   # start with a simple binary classification: TRUE if donateur, FALSE if not 
   # TO DO: extend to multi class model with different groups for recurrent payment vs one shot vs none 
-  enriched_coplaintiffs[,target:=as.integer(is.na(id))]
+  enriched_coplaintiffs[,target:=1-as.integer(is.na(id))]
 
 # build features
   enriched_coplaintiffs<- profiling(enriched_coplaintiffs)
@@ -129,7 +176,7 @@ if(!is.data.table(enriched_coplaintiffs))
                                            ,profession
                                            ,language
                                            ,newsletter
-                                           ,is.na(sms_code)
+                                           ,valid_phone
                                            ,age_group
                                            ,region
                                            ,province)]

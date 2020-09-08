@@ -46,6 +46,10 @@ profiling <- function(profiling_data){
   profiling_data[ postal_code < 9000 & is.na(province) , province :='West Flanders'] 
   profiling_data[ postal_code >=9000 & is.na(province) , province :='East Flanders'] 
   table(profiling_data[, province], useNA = 'ifany')
+  
+  #valid phone_provided -> if they received the SMS code, it s OK
+  profiling_data[, valid_phone:=ifelse(is.na(sms_code),0,1)]
+  
   profiling_data
 }
 

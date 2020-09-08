@@ -65,7 +65,7 @@ linkEpiWeights <-function(dt1, dt2, blockfld){
 }
 
 #test if precomputed deduplicated coplaintiffs file exists in memory or on disk, else reload
-if(!is.data.table(coplaintiffs_clean))
+if(!is.data.table(try(coplaintiffs_clean)))
 {
    if(!is.data.table(try(coplaintiffs_clean <- readFstFromDirectory("coplaintiffs_deduplicated","data")))) {
       
