@@ -64,9 +64,11 @@ linkEpiWeights <-function(dt1, dt2, blockfld){
    pairs
 }
 
-#test if precomputed coplaintiffs file exists, else reload
-if(!is.data.table(try(test <- readFstFromDirectory("coplaintiffs_deduplicated","data")))) {
-
+#test if precomputed deduplicated coplaintiffs file exists in memory or on disk, else reload
+if(!is.data.table(coplaintiffs_clean))
+{
+   if(!is.data.table(try(coplaintiffs_clean <- readFstFromDirectory("coplaintiffs_deduplicated","data")))) {
+      
       #start copy of main.R to load deduplicated codemandeurs
       #1) Extract latest records and manual fixes
       fixed_data <- fullLoadCoPlaintiffs()
@@ -90,15 +92,16 @@ if(!is.data.table(try(test <- readFstFromDirectory("coplaintiffs_deduplicated","
       dedupData <- deduplicate(geocodedData)
       #end copy of main.R to load deduplicated codemandeurs
       
-   #post process coplaintiffs : remove duplicates from dedupData and store
-   coplaintiffs_clean <- dedupData[auto_reason!='D' | is.na(auto_reason),]      
-   coplaintiffs_clean [,name_grouped:= paste(lastname, firstname, sep = ' ')]      
-   coplaintiffs_clean[ , street_and_nr := paste(ifelse(is.na(address), '', tolower(address) )
-                                             ,ifelse(is.na(street_nb), '', tolower(street_nb) )
-                                             ,ifelse(is.na(address2), '', tolower(address2) )
-   )]  
-   writeCsvIntoDirectory(coplaintiffs_clean, 'coplaintiffs', parameters$path_forupload)
-   writeFstIntoDirectory(coplaintiffs_clean, "coplaintiffs_deduplicated", "data")      
+      #post process coplaintiffs : remove duplicates from dedupData and store
+      coplaintiffs_clean <- dedupData[auto_reason!='D' | is.na(auto_reason),]      
+      coplaintiffs_clean [,name_grouped:= paste(lastname, firstname, sep = ' ')]      
+      coplaintiffs_clean[ , street_and_nr := paste(ifelse(is.na(address), '', tolower(address) )
+                                                   ,ifelse(is.na(street_nb), '', tolower(street_nb) )
+                                                   ,ifelse(is.na(address2), '', tolower(address2) )
+      )]  
+      writeCsvIntoDirectory(coplaintiffs_clean, 'coplaintiffs', "parameters$path_forupload")
+      writeFstIntoDirectory(coplaintiffs_clean, "coplaintiffs_deduplicated", "data")      
+   }
 }
 
 print('start loading donateurs data files')
@@ -242,8 +245,8 @@ link_coplaintiffs <- prepareLinkage(cleancoplaintiffs)
                                         ,   by = "id"
                                         # ,   by.y = id
                                           ))
-#debug table(enriched_coplaintiffs[,.(is.na(donation_amount), donation_platform)],useNA = 'ifany')
-
+   #debug table(enriched_coplaintiffs[,.(is.na(donation_amount), donation_platform)],useNA = 'ifany')
+   writeCsvIntoDirectory(enriched_coplaintiffs, 'coplaintiffs_for_model',"data")
 
 
 # C) match remaining using no blocking criterion
