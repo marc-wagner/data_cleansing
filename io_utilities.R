@@ -122,7 +122,8 @@ cleanRawData <- function(dt, check_dt= NULL){
     if(nrow(dt[is.na(id),]) != 0){
       print('records with no id: ')
       print(nrow(dt[is.na(id),]))
-      View(dt[is.na(id),])
+      #debug information: disabled for run
+      #View(dt[is.na(id),])
     }  
     
     print('page count')
@@ -305,7 +306,7 @@ fullLoadCoPlaintiffs <- function()
   #replace records by manual fixes
   fixed_data <- blendData(fixed_data, manual_fixes3)
   
-  print('start manual corrections current batch')
+  print('start manual corrections batch003: fixes before Excel extract')
   manual_fixes4 <- readRawDataFolder(path = paste( paste ( '..',  parameters$batch_name, sep='/') , parameters$path_input_data, sep='/'))
   #corrections on 20190612: false negatives from deduplication, last cleanups
   
@@ -354,7 +355,7 @@ storeDedupedCoPlaintiffs <- function(dedupdata)
 
 adhoc_cleaning <- function(){
   #add dob and newsletter to original plaintiffs
-  original_plaintiffs_dob <- read.csv2( paste(paste( paste ( '..',  'Batch002', sep='/') , parameters$path_input_data, sep='/'),'manual_enrichment/original_plaintiffs_dob_enrich.csv', sep='/'), stringsAsFactors = FALSE) %>% 
+  original_plaintiffs_dob <- read.csv2( paste(paste( paste ( '..',  'Batch002', sep='/', encoding="UTF-8") , parameters$path_input_data, sep='/'),'manual_enrichment/original_plaintiffs_dob_enrich.csv', sep='/'), stringsAsFactors = FALSE) %>% 
     as.data.table()
   original_plaintiffs_dob <-  original_plaintiffs_dob[,.(firstname, lastname, orig_dob = dob, orig_newsletter = newsletter, orig_is_public = is_public)]
   original_plaintiffs_dob[                 , fixed_dob := parse_date_time(orig_dob, c("%d-%m-%y", "%d/%m/%y" , "%d-%m-%Y" , "%d/%m/%Y", "%d%m%Y", "%Y") )]
