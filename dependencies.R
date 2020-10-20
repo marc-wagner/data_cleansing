@@ -28,6 +28,7 @@ library("iml")
 #visualization
 library("ggplot2")
 library("classifierplots")
+library("DiagrammeR")
 
 parameters <- config::get(file = "../parameters.yml")
 

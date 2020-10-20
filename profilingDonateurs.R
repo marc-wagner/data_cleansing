@@ -7,6 +7,7 @@ source('dependencies.R')
 source('io_utilities.R')
 source('geocode.R')
 source('RecordLinkage.R')
+source('profiling.R')
 
 prepareLinkage <- function(dt){
    dt_out <- copy(dt[, .(id, first_last_name, street_and_nr, zip, locality, duplicate_id, email, phone, reason, dob, language)])
@@ -100,6 +101,7 @@ if(!is.data.table(try(coplaintiffs_clean)))
                                                    ,ifelse(is.na(address2), '', tolower(address2) )
       )]  
       writeCsvIntoDirectory(coplaintiffs_clean, 'coplaintiffs', "parameters$path_forupload")
+      #TO DO fix encoding error to enable data save to fst. csv is not suitable for reuse.
       writeFstIntoDirectory(coplaintiffs_clean, "coplaintiffs_deduplicated", "data")      
    }
 }
@@ -157,7 +159,7 @@ link_coplaintiffs <- prepareLinkage(cleancoplaintiffs)
    #ok
 
 # A2) enrich donateurs with info from coplaintiff using linked records
-   enriched_donateurs <- donateurs[,.( id.1 = id, page, zip1 = zip, donation_amount, donation_date)]
+   enriched_donateurs <- donateurs[,.( id.1 = id, page, zip1 = zip, donation_amount, donation_date, d_firstname = firstname, d_lastname = lastname, d_email = email)]
    enriched_donateurs <-  base::merge(  enriched_donateurs
                                       , data.table(RecordLinkage::getPairs(rpairs_email, single.rows=TRUE))[,.(id.1
                                                                                                    , dob_email = dob.2
@@ -291,16 +293,35 @@ link_coplaintiffs <- prepareLinkage(cleancoplaintiffs)
          #    print(chunk)  
          #    }
 
-profiling_data <- enriched_donateurs[,.(  id             = id.1
+   
+enriched_donateurs[, firstname :=  d_firstname] 
+enriched_donateurs[, lastname := d_lastname] 
+enriched_donateurs[, email := d_email]   
+enriched_donateurs[, firstname :=  d_firstname] 
+enriched_donateurs[, lastname := d_lastname] 
+enriched_donateurs[, email := d_email]  
+#TO DO: use this info, not currently used
+profiling_data_amounts <- enriched_donateurs[,.(  id             = id.1
                                              ,payment_method = page
                                              ,donation_amount
                                              ,donation_date   = as.Date('1900-01-01')+ as.integer(donation_date) - 2
-                                             ,dob      = as.Date(ifelse(is.na(dob), dob.2, dob), origin = '1970-01-01')
-                                             ,language        = ifelse(is.na(language), language.2, language)
-                                             ,postal_code             = ifelse(is.na(zip), ifelse(is.na(zip.2), as.character(zip1), as.character(zip.2)) , as.character(zip)) 
+                                             ,dob      = as.Date(ifelse(is.na(dob_email), dob_name, dob_email), origin = '1970-01-01')
+                                             ,language        = ifelse(is.na(language_email), language_name, language_email)
+                                             ,postal_code             = ifelse(is.na(zip_email), ifelse(is.na(zip_name), as.character(zip1), as.character(zip_name)) , as.character(zip_email)) 
                                              )]
 
+profiling_data  <- enriched_donateurs[,.(   firstname = d_firstname
+                                           ,lastname = d_lastname
+                                           ,email = d_email
+                                           ,payment_method = page
+                                           ,dob            = as.Date(ifelse(is.na(dob_email), dob_name, dob_email), origin = '1970-01-01')
+                                           ,language       = ifelse(is.na(language_email), language_name, language_email)
+                                           ,postal_code    = ifelse(is.na(zip_email), ifelse(is.na(zip_name), as.character(zip1), as.character(zip_name)) , as.character(zip_email)) 
+)]
+
 #and proceed to profiling.R with donateur data
+profiling_data <- unique(profiling_data)
+
 
 #give stats based on zip code, extrapolate language when not in Bxl, skip dob.
 
@@ -311,3 +332,42 @@ profiling_data <- enriched_donateurs[,.(  id             = id.1
 #by duplicating the fields: didnt give substantially better results
 
 ""
+
+rm(fixed_data, geocodedData,link_coplaintiffs, link_donateurs,rpairs_email,rpairs_name,cleandonateurs, cleancoplaintiffs)
+
+
+# TO DO
+# 
+# check why coplaintiffs file is not complete: schaerlaekens
+# add original coplaintiffs
+# add supporters
+# rerun profiling with below unique combo: email, firstname, lastname
+# rerun model with demographic features only (not newsletter, not valid_phone)
+# 
+# test_unique <- unique(cleandonateurs[,.(page, email)])
+# > table(test_unique$page)
+# 
+# GCL  mollie  paypal triodos 
+# 2734     441     882       1 
+# > test_unique <- unique(cleandonateurs[,.(page, email, firstname, lastname)])
+# > table(test_unique$page)
+# 
+# GCL  mollie  paypal triodos 
+# 2755     446     890      35    =  4126
+# 
+# 
+# table(unique(enriched_donateurs[,.(match_any, page, d_email, d_firstname, d_lastname)])[,.(match_any, page)], useNA = 'ifany')
+# page
+# match_any  GCL mollie paypal triodos
+# 1    2325    291    414       0
+# <NA>  430    155    476      35
+# > table(unique(enriched_donateurs[,.(match_any, page, d_email, d_firstname, d_lastname)])[,.(match_any)], useNA = 'ifany')
+# 
+# 1 <NA> 
+#    3030 1096  = 4126
+# 
+# 
+# - wim schaerlaekens (48)  = reason PsvR, id 49959    in excel  
+# - lionel fueyo (83)  =   id 32463  in excel  ,  2577 in dataset !!!
+#    
+#    in list of intervenin parties:  50166 records submitted 
